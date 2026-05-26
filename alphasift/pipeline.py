@@ -274,7 +274,7 @@ def screen(
     df_top = df.head(top_k).copy()
 
     # 6. Build Pick list
-    df_top["data_quality_score"] = _compute_data_quality(df_top)
+    df_top.loc[:, "data_quality_score"] = _compute_data_quality(df_top)
     picks = _df_to_picks(df_top)
 
     # 7. L2 LLM ranking
