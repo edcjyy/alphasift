@@ -35,8 +35,16 @@ def assess_market_state(
     *,
     index_code: str = "000300.SH",
     source: str = "auto",
+    snapshot_df: pd.DataFrame | None = None,
 ) -> MarketState | None:
     """Assess current A-share market state.
+
+    Args:
+        index_code: Benchmark index code.
+        source: Data source for index history.
+        snapshot_df: Optional pre-fetched snapshot with change_pct column.
+                     If provided, market breadth is computed from it directly,
+                     skipping the efinance fetch.
 
     Returns None if data sources are unavailable.
     """
@@ -65,7 +73,7 @@ def assess_market_state(
 
     # 2. Market breadth: advance/decline ratio from snapshot
     try:
-        _assess_breadth(state)
+        _assess_breadth(state, snapshot_df=snapshot_df)
     except Exception as exc:
         logger.debug("Breadth assessment failed: %s", exc)
 
@@ -84,11 +92,18 @@ def assess_market_state(
     return state
 
 
-def _assess_breadth(state: MarketState) -> None:
-    """Compute market breadth from full snapshot."""
-    from alphasift.snapshot import fetch_cn_snapshot
+def _assess_breadth(state: MarketState, *, snapshot_df: pd.DataFrame | None = None) -> None:
+    """Compute market breadth from full snapshot (uses snapshot_df if provided)."""
+    if snapshot_df is not None and "change_pct" in snapshot_df.columns:
+        df = snapshot_df
+    else:
+        from alphasift.snapshot import fetch_cn_snapshot
+        try:
+            df = fetch_cn_snapshot(source="efinance")
+        except Exception:
+            logger.debug("Market breadth: efinance snapshot failed, breadth skipped")
+            return
 
-    df = fetch_cn_snapshot(source="efinance")
     if df is None or df.empty or "change_pct" not in df.columns:
         return
 
