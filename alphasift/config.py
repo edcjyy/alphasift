@@ -134,6 +134,10 @@ class Config:
         default_factory=lambda: list(DEFAULT_SNAPSHOT_SOURCE_PRIORITY)
     )
 
+    # Tushare proxy/relay URL (optional). When set, Tushare API requests are
+    # routed through this proxy instead of the official Tushare Pro server.
+    tushare_api_url: str = ""
+
     # Strategy directory
     strategies_dir: Path = field(default_factory=_default_strategies_dir)
 
@@ -161,7 +165,7 @@ class Config:
     daily_enrich_enabled: bool = False
     daily_enrich_max_candidates: int = 100
     daily_lookback_days: int = 120
-    daily_source: str = "akshare"
+    daily_source: str = "auto"
     daily_fetch_retries: int = 2
 
     # Independent risk layer.
@@ -236,6 +240,7 @@ class Config:
             llm_min_coverage=_parse_float_env("LLM_MIN_COVERAGE", 0.60),
             llm_context_max_chars=max(500, int(os.getenv("LLM_CONTEXT_MAX_CHARS", "4000"))),
             snapshot_source_priority=_resolve_snapshot_source_priority(),
+            tushare_api_url=os.getenv("TUSHARE_API_URL", "").strip(),
             strategies_dir=_default_strategies_dir(),
             industry_map_files=[
                 Path(item)
@@ -259,7 +264,7 @@ class Config:
             daily_enrich_enabled=_parse_bool_env("DAILY_ENRICH_ENABLED", False),
             daily_enrich_max_candidates=max(1, int(os.getenv("DAILY_ENRICH_MAX_CANDIDATES", "100"))),
             daily_lookback_days=max(30, int(os.getenv("DAILY_LOOKBACK_DAYS", "120"))),
-            daily_source=os.getenv("DAILY_SOURCE", "akshare"),
+            daily_source=os.getenv("DAILY_SOURCE", "auto"),
             daily_fetch_retries=max(0, int(os.getenv("DAILY_FETCH_RETRIES", "2"))),
             risk_enabled=_parse_bool_env("RISK_ENABLED", True),
             risk_max_penalty=_parse_float_env("RISK_MAX_PENALTY", 12.0),

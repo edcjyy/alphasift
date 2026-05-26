@@ -60,6 +60,7 @@ TUSHARE_TOKEN=...
 | `INDUSTRY_PROVIDER_MAX_BOARDS` | 否 | provider 模式最多反查板块数 | `80` |
 | `SNAPSHOT_SOURCE_PRIORITY` | 否 | 数据源优先级，逗号分隔；不设置时若配置了 Tushare token 会优先 `tushare` | 无 token: `efinance,akshare_em,em_datacenter` |
 | `TUSHARE_TOKEN` / `TUSHARE_API_TOKEN` | 使用 `tushare` 时必须 | Tushare Pro token，用于最近交易日日线和 daily_basic 兜底 | - |
+| `TUSHARE_API_URL` | 否 | Tushare API 代理地址；设置后通过代理服务器访问 Tushare，适用于 API 中转站/非官方代理场景；不设置时使用 Tushare 官方 API | - |
 | `TUSHARE_TRADE_DATE` | 否 | 固定 Tushare 交易日，格式 `YYYYMMDD`，便于复现实验 | 自动取最近开市日 |
 | `POST_ANALYZERS` | 否 | L3 后置分析器，设为 `none` 可关闭 | `scorecard` |
 | `POST_ANALYSIS_MAX_PICKS` | 否 | DSA/HTTP 等高成本 L3 分析器最多处理前 N 只；本地 scorecard 默认处理全部输出 | `3` |

@@ -99,6 +99,149 @@ def test_fetch_tushare_requires_token(monkeypatch):
         fetch_cn_snapshot("tushare")
 
 
+def test_fetch_tushare_uses_proxy_when_configured(monkeypatch):
+    """When TUSHARE_API_URL is set, the pro api object should have its
+    internal URL overridden to the proxy address."""
+    monkeypatch.setenv("TUSHARE_TOKEN", "relay-token-123")
+    monkeypatch.setenv("TUSHARE_API_URL", "http://my-proxy/tushare")
+
+    captured = {}
+
+    class FakePro:
+        def __init__(self, token):
+            self._token = token
+            self._url = "https://api.tushare.pro"
+
+        # Simulate the name-mangled attributes that the proxy code sets
+        @property
+        def _DataApi__token(self):
+            return self._token
+
+        @_DataApi__token.setter
+        def _DataApi__token(self, value):
+            self._token = value
+
+        @property
+        def _DataApi__http_url(self):
+            return self._url
+
+        @_DataApi__http_url.setter
+        def _DataApi__http_url(self, value):
+            self._url = value
+
+        def trade_cal(self, **kwargs):
+            return pd.DataFrame([{"cal_date": "20260430", "is_open": "1"}])
+
+        def daily(self, **kwargs):
+            captured["daily_called"] = True
+            return pd.DataFrame([{
+                "ts_code": "000001.SZ",
+                "trade_date": "20260430",
+                "close": 10.0,
+                "pct_chg": 1.23,
+                "amount": 123456.789,
+            }])
+
+        def daily_basic(self, **kwargs):
+            return pd.DataFrame([{
+                "ts_code": "000001.SZ",
+                "turnover_rate": 2.5,
+                "volume_ratio": 1.1,
+                "pe": 5.2,
+                "pb": 0.8,
+                "total_mv": 100000,
+                "circ_mv": 80000,
+            }])
+
+        def stock_basic(self, **kwargs):
+            return pd.DataFrame([{
+                "ts_code": "000001.SZ",
+                "symbol": "000001",
+                "name": "平安银行",
+                "industry": "银行",
+            }])
+
+    import tushare as ts
+    monkeypatch.setattr(ts, "pro_api", lambda token: FakePro(token))
+
+    df = fetch_cn_snapshot("tushare")
+    assert captured.get("daily_called")
+    assert len(df) == 1
+
+
+def test_fetch_tushare_no_proxy_uses_official(monkeypatch):
+    """When TUSHARE_API_URL is NOT set, the pro api object keeps its
+    original official URL (no override)."""
+    monkeypatch.setenv("TUSHARE_TOKEN", "official-token")
+    monkeypatch.delenv("TUSHARE_API_URL", raising=False)
+
+    captured = {}
+
+    class FakePro:
+        def __init__(self, token):
+            self._token = token
+            self._url = "https://api.tushare.pro"
+            self.token_set_count = 0
+            self.url_set_count = 0
+
+        @property
+        def _DataApi__token(self):
+            return self._token
+
+        @_DataApi__token.setter
+        def _DataApi__token(self, value):
+            self._token = value
+            self.token_set_count += 1
+
+        @property
+        def _DataApi__http_url(self):
+            return self._url
+
+        @_DataApi__http_url.setter
+        def _DataApi__http_url(self, value):
+            self._url = value
+            self.url_set_count += 1
+
+        def trade_cal(self, **kwargs):
+            return pd.DataFrame([{"cal_date": "20260430", "is_open": "1"}])
+
+        def daily(self, **kwargs):
+            captured["daily_called"] = True
+            return pd.DataFrame([{
+                "ts_code": "000001.SZ",
+                "trade_date": "20260430",
+                "close": 10.0,
+                "pct_chg": 1.23,
+                "amount": 123456.789,
+            }])
+
+        def daily_basic(self, **kwargs):
+            return pd.DataFrame([{
+                "ts_code": "000001.SZ",
+                "turnover_rate": 2.5,
+                "volume_ratio": 1.1,
+                "pe": 5.2,
+                "pb": 0.8,
+                "total_mv": 100000,
+                "circ_mv": 80000,
+            }])
+
+        def stock_basic(self, **kwargs):
+            return pd.DataFrame([{
+                "ts_code": "000001.SZ",
+                "symbol": "000001",
+                "name": "平安银行",
+                "industry": "银行",
+            }])
+
+    import tushare as ts
+    monkeypatch.setattr(ts, "pro_api", lambda token: FakePro(token))
+
+    df = fetch_cn_snapshot("tushare")
+    assert captured.get("daily_called")
+    assert len(df) == 1
+
+
 def test_fetch_snapshot_with_fallback_attaches_source_errors(monkeypatch):
     def fake_fetch(source):
         if source == "bad":

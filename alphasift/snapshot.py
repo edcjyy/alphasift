@@ -7,7 +7,7 @@ This is separate from single-stock realtime quotes.
 
 import logging
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 
@@ -150,6 +150,11 @@ def _fetch_tushare() -> pd.DataFrame:
 
     Tushare is not a real-time source here. It is used as a resilient fallback
     by joining the latest open trading day's daily quote and daily_basic data.
+
+    Supports proxy mode: if TUSHARE_API_URL is set, the API endpoint is
+    redirected to a third-party Tushare proxy/relay instead of the official
+    Tushare Pro server. This is useful for API relay services that provide
+    Tushare-compatible access through their own endpoint.
     """
     token = (
         os.getenv("TUSHARE_TOKEN", "").strip()
@@ -161,47 +166,99 @@ def _fetch_tushare() -> pd.DataFrame:
     import tushare as ts
 
     pro = ts.pro_api(token)
+
+    # Proxy/relay mode: override the internal API URL if a proxy is configured.
+    # The relay token is NOT the official Tushare token — it must be set on
+    # both __token and __http_url for the relay to route requests correctly.
+    proxy_url = os.getenv("TUSHARE_API_URL", "").strip()
+    if proxy_url:
+        pro._DataApi__token = token
+        pro._DataApi__http_url = proxy_url
+        logger.info("Tushare proxy mode: %s", proxy_url)
+
     trade_date = _resolve_tushare_trade_date(pro)
-    daily = pro.daily(
-        trade_date=trade_date,
-        fields="ts_code,trade_date,close,pct_chg,amount",
-    )
-    daily_basic = pro.daily_basic(
-        trade_date=trade_date,
-        fields="ts_code,turnover_rate,volume_ratio,pe,pb,total_mv,circ_mv",
-    )
+
+    # Try up to 3 recent dates in case today's data is not yet published
+    # (common with proxies that lag behind the official Tushare server).
+    daily: pd.DataFrame | None = None
+    daily_basic: pd.DataFrame | None = None
+    resolved_date = trade_date
+    for _attempt in range(3):
+        daily = pro.daily(
+            trade_date=resolved_date,
+            fields="ts_code,trade_date,close,pct_chg,amount",
+        )
+        daily_basic = pro.daily_basic(
+            trade_date=resolved_date,
+            fields="ts_code,turnover_rate,volume_ratio,pe,pb,total_mv,circ_mv",
+        )
+        if daily is not None and not daily.empty and daily_basic is not None and not daily_basic.empty:
+            break
+        logger.debug("Tushare no data for %s, trying previous day", resolved_date)
+        prev = datetime.strptime(resolved_date, "%Y%m%d") - timedelta(days=1)
+        while prev.weekday() >= 5:
+            prev -= timedelta(days=1)
+        resolved_date = prev.strftime("%Y%m%d")
+
+    if daily is None or daily.empty:
+        raise RuntimeError(f"tushare daily returned empty data for {trade_date} (tried back to {resolved_date})")
+    if daily_basic is None or daily_basic.empty:
+        raise RuntimeError(f"tushare daily_basic returned empty data for {trade_date} (tried back to {resolved_date})")
+
+    if resolved_date != trade_date:
+        logger.info("Tushare using %s instead of %s (data not yet available)", resolved_date, trade_date)
+
     stock_basic = pro.stock_basic(
         exchange="",
         list_status="L",
         fields="ts_code,symbol,name,industry",
     )
 
-    if daily is None or daily.empty:
-        raise RuntimeError(f"tushare daily returned empty data for {trade_date}")
-    if daily_basic is None or daily_basic.empty:
-        raise RuntimeError(f"tushare daily_basic returned empty data for {trade_date}")
-
     return _prepare_tushare_snapshot(daily, daily_basic, stock_basic)
 
 
 def _resolve_tushare_trade_date(pro) -> str:
-    """Return the latest open trade date for Tushare requests."""
+    """Return the latest open trade date for Tushare requests.
+
+    Tries trade_cal API with multiple exchange values; if all fail (e.g.
+    proxy doesn't support trade_cal), falls back to the most recent weekday.
+    """
     explicit = os.getenv("TUSHARE_TRADE_DATE", "").strip()
     if explicit:
         return explicit
 
     end = date.today()
     start = end - timedelta(days=30)
-    calendar = pro.trade_cal(
-        exchange="",
-        start_date=start.strftime("%Y%m%d"),
-        end_date=end.strftime("%Y%m%d"),
-        is_open="1",
-        fields="cal_date,is_open",
-    )
-    if calendar is None or calendar.empty or "cal_date" not in calendar.columns:
-        raise RuntimeError("tushare trade_cal returned no open trading days")
-    return str(calendar["cal_date"].max())
+
+    # Try different exchange values — some proxies don't support exchange=""
+    for exchange in ("", "SSE", "SZSE"):
+        try:
+            calendar = pro.trade_cal(
+                exchange=exchange,
+                start_date=start.strftime("%Y%m%d"),
+                end_date=end.strftime("%Y%m%d"),
+                is_open="1",
+                fields="cal_date,is_open",
+            )
+            if calendar is not None and not calendar.empty and "cal_date" in calendar.columns:
+                return str(calendar["cal_date"].max())
+        except Exception as e:
+            logger.debug("trade_cal with exchange=%r failed: %s", exchange, e)
+            continue
+
+    # Fallback: use the most recent weekday (A-share trades Mon-Fri)
+    logger.warning("trade_cal unavailable, falling back to recent weekday")
+    d = end
+    while d.weekday() >= 5:  # Saturday=5, Sunday=6
+        d -= timedelta(days=1)
+    # If today is before 15:30 on a weekday, data may not be published yet;
+    # use previous trading day instead
+    now = datetime.now()
+    if d == end and now.hour < 16:
+        d -= timedelta(days=1)
+        while d.weekday() >= 5:
+            d -= timedelta(days=1)
+    return d.strftime("%Y%m%d")
 
 
 def _prepare_tushare_snapshot(

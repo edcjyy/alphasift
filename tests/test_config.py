@@ -96,6 +96,23 @@ def test_config_respects_explicit_snapshot_priority_with_tushare_token(monkeypat
     assert config.snapshot_source_priority == ["efinance", "em_datacenter"]
 
 
+def test_config_reads_tushare_api_url(monkeypatch):
+    monkeypatch.setenv("TUSHARE_TOKEN", "relay-token")
+    monkeypatch.setenv("TUSHARE_API_URL", "http://my-proxy/tushare")
+
+    config = Config.from_env()
+
+    assert config.tushare_api_url == "http://my-proxy/tushare"
+
+
+def test_config_tushare_api_url_defaults_empty(monkeypatch):
+    monkeypatch.delenv("TUSHARE_API_URL", raising=False)
+
+    config = Config.from_env()
+
+    assert config.tushare_api_url == ""
+
+
 def test_config_reads_industry_and_candidate_context_env(monkeypatch):
     monkeypatch.setenv("INDUSTRY_MAP_FILES", "/tmp/industry.csv,/tmp/concepts.json")
     monkeypatch.setenv("INDUSTRY_PROVIDER", "akshare")

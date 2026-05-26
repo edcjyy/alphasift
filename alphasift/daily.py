@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 import time
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 _DAILY_FEATURE_DEFAULTS = {
     "daily_data_points": pd.NA,
@@ -84,15 +87,25 @@ def fetch_daily_history(
 ) -> pd.DataFrame:
     """Fetch daily history for one A-share code.
 
-    ``source`` accepts ``akshare``, ``baostock`` or ``auto``. ``auto`` tries
-    akshare first and silently falls back to baostock when akshare fails. This
-    matches the multi-source resilience pattern recommended for A-share data
-    pipelines (DSA-style: free primary + free backup).
+    ``source`` accepts ``akshare``, ``baostock``, ``tushare`` or ``auto``.
+    ``auto`` tries tushare first (when TUSHARE_TOKEN is set), then akshare,
+    then baostock. This matches the multi-source resilience pattern recommended
+    for A-share data pipelines (DSA-style: free primary + free backup).
     """
     src = (source or "akshare").lower()
     if src == "auto":
-        sources: tuple[str, ...] = ("akshare", "baostock")
-    elif src in ("akshare", "baostock"):
+        # When Tushare token is available, try it first (most reliable with
+        # proxy); fall back to akshare then baostock.
+        import os
+
+        has_tushare = bool(
+            os.getenv("TUSHARE_TOKEN", "").strip()
+            or os.getenv("TUSHARE_API_TOKEN", "").strip()
+        )
+        sources: tuple[str, ...] = (
+            ("tushare", "akshare", "baostock") if has_tushare else ("akshare", "baostock")
+        )
+    elif src in ("akshare", "baostock", "tushare"):
         sources = (src,)
     else:
         raise ValueError(f"Unsupported daily source: {source}")
@@ -105,6 +118,8 @@ def fetch_daily_history(
             try:
                 if current == "akshare":
                     return _fetch_daily_akshare(code, lookback_days=lookback_days)
+                if current == "tushare":
+                    return _fetch_daily_tushare(code, lookback_days=lookback_days)
                 return _fetch_daily_baostock(code, lookback_days=lookback_days)
             except Exception as exc:  # noqa: BLE001 - aggregated below
                 last_error = exc
@@ -133,6 +148,57 @@ def _fetch_daily_akshare(code: str, *, lookback_days: int) -> pd.DataFrame:
     if df is None or df.empty:
         raise RuntimeError(f"akshare daily history empty for {code}")
     return df.tail(max(lookback_days, 30)).copy()
+
+
+def _fetch_daily_tushare(code: str, *, lookback_days: int) -> pd.DataFrame:
+    """Fetch daily history via Tushare Pro API (supports proxy relay).
+
+    Uses ``pro.daily()`` with the same TUSHARE_API_URL proxy mechanism as
+    snapshot.py, so it works transparently with API relay services.
+    """
+    import os
+
+    import tushare as ts
+
+    token = os.getenv("TUSHARE_TOKEN", "").strip() or os.getenv("TUSHARE_API_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("TUSHARE_TOKEN not set; cannot fetch daily history from tushare")
+
+    ts_code = _to_tushare_code(code)
+    end_date = datetime.now().strftime("%Y%m%d")
+    start_date = (datetime.now() - timedelta(days=max(lookback_days * 2, 90))).strftime("%Y%m%d")
+
+    pro = ts.pro_api(token)
+    proxy_url = os.getenv("TUSHARE_API_URL", "").strip()
+    if proxy_url:
+        pro._DataApi__token = token
+        pro._DataApi__http_url = proxy_url
+        logger.debug("Tushare daily proxy mode: %s", proxy_url)
+
+    df = pro.daily(
+        ts_code=ts_code,
+        start_date=start_date,
+        end_date=end_date,
+        fields="trade_date,open,high,low,close,vol,amount",
+    )
+    if df is None or df.empty:
+        raise RuntimeError(f"tushare daily history empty for {ts_code}")
+
+    # Rename to match expected column names
+    df = df.rename(columns={"trade_date": "date", "vol": "volume"})
+    # Tushare returns newest first; sort ascending for MA/RSI computation
+    df = df.sort_values("date").reset_index(drop=True)
+    return df.tail(max(lookback_days, 30)).copy()
+
+
+def _to_tushare_code(code: str) -> str:
+    """Convert 6-digit code to Tushare ts_code format (e.g. 600519 → 600519.SH)."""
+    raw = str(code).strip().zfill(6)
+    if raw.startswith(("6", "9", "5")):
+        return f"{raw}.SH"
+    if raw.startswith(("8", "4")):
+        return f"{raw}.BJ"
+    return f"{raw}.SZ"
 
 
 def _fetch_daily_baostock(code: str, *, lookback_days: int) -> pd.DataFrame:
