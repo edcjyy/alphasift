@@ -21,16 +21,19 @@ screening:
     change_pct_max: 8.5
     price_min: 3
     price_max: 220
+    exclude_new_ipo_days: 60
   tech_weight: 0.35
   factor_weights:
     value: 0.25
-    liquidity: 0.20
+    liquidity: 0.15
     momentum: 0.20
-    activity: 0.15
+    activity: 0.10
     stability: 0.10
     theme_heat: 0.05
-    size: 0.10
+    size: 0.05
+    quality: 0.10
   scoring_profile:
+    value_sector_neutral: true
     momentum_chase_start_pct: 5.5
     activity_ideal_volume_ratio: 2.0
     activity_ideal_turnover_rate: 4.0

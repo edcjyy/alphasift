@@ -40,6 +40,18 @@ class HardFilterConfig:
     pullback_to_ma20_pct_max: float | None = None
     consolidation_days_20d_min: int | None = None
     consolidation_days_20d_max: int | None = None
+    # New filters (20260527 optimizations)
+    exclude_limit_up: bool = False
+    exclude_limit_down: bool = False
+    exclude_new_ipo_days: int | None = None  # exclude stocks listed within N days
+    data_quality_min: int | None = None  # minimum data quality score
+    # Multi-timeframe momentum filters
+    change_5d_min: float | None = None
+    change_5d_max: float | None = None
+    change_20d_min: float | None = None
+    change_20d_max: float | None = None
+    change_120d_min: float | None = None
+    change_120d_max: float | None = None
 
 
 @dataclass
@@ -115,6 +127,11 @@ class Pick:
     board_heat_summary: str = ""
     change_60d: float | None = None
     signal_score: float | None = None
+    change_5d: float | None = None
+    change_20d: float | None = None
+    change_120d: float | None = None
+    roe: float | None = None
+    data_quality_score: float | None = None
     ma_bullish: bool | None = None
     price_above_ma20: bool | None = None
     macd_status: str = ""

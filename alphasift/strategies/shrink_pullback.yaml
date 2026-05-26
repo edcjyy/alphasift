@@ -19,6 +19,7 @@ screening:
     volume_ratio_20d_max: 1.5
     pullback_to_ma20_pct_min: -2.0
     pullback_to_ma20_pct_max: 8.0
+    exclude_new_ipo_days: 60
   tech_weight: 0.5
   factor_weights:
     momentum: 0.35

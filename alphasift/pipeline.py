@@ -13,7 +13,9 @@ from alphasift.candidate_context import collect_candidate_context
 from alphasift.context import build_llm_context
 from alphasift.daily import enrich_daily_features
 from alphasift.filter import apply_hard_filters, requires_daily_features, without_daily_filters
+from alphasift.financial import enrich_roe
 from alphasift.industry import enrich_industry_concepts
+from alphasift.market_state import apply_market_state_weights, assess_market_state
 from alphasift.models import Pick, ScreenResult
 from alphasift.post_analysis import normalize_post_analyzers, run_post_analyzers
 from alphasift.ranker import rank_candidates_with_metadata
@@ -219,8 +221,48 @@ def screen(
             portfolio_diversity_enabled=config.portfolio_diversity_enabled,
         )
 
-    # 4. Compute screen_score
-    df = compute_screen_scores(df, screening)
+    # 3.5 Enrich ROE for quality factor scoring.
+    # Uses snapshot PE/PB (already present) for fast local computation;
+    # skips fina_indicator API which may be unreliable at the 15000-credit tier.
+    df = enrich_roe(df, force_tushare_fallback=True)
+    roe_count = (df.get("roe", pd.Series(dtype=float)).notna()).sum()
+    if roe_count > 0:
+        degradation.append(
+            f"ROE enriched: {roe_count}/{len(df)} candidates "
+            f"(source: {(df.get('roe_source') == 'daily_basic_est').sum()} daily_basic_est, "
+            f"{(df.get('roe_source') == 'snapshot_est').sum()} snapshot_est)"
+        )
+
+    # Compute screen_score with optional market-state weight adjustment
+    market_state = assess_market_state() if config.risk_enabled else None
+    ms_weights = None
+    if market_state and market_state.regime != "neutral":
+        degradation.append(
+            f"Market state: regime={market_state.regime} "
+            + " | ".join(market_state.notes)
+        )
+        # Extract base weights from screening config
+        from alphasift.scorer import _FACTOR_COLUMNS as _cols
+        base_weights = screening.factor_weights or {
+            "value": (1 - screening.tech_weight) * 0.50,
+            "liquidity": (1 - screening.tech_weight) * 0.25,
+            "stability": (1 - screening.tech_weight) * 0.25,
+            "momentum": screening.tech_weight * 0.55,
+            "activity": screening.tech_weight * 0.45,
+        }
+        base_weights = {
+            k: max(float(v), 0.0) for k, v in base_weights.items() if k in _cols
+        }
+        total = sum(base_weights.values())
+        if total > 0:
+            base_weights = {k: v / total for k, v in base_weights.items()}
+        ms_weights = apply_market_state_weights(base_weights, market_state)
+        degradation.append(
+            "Market-state adjusted weights: "
+            + ", ".join(f"{k}={v:.3f}" for k, v in ms_weights.items())
+        )
+
+    df = compute_screen_scores(df, screening, market_state_weights=ms_weights)
     df = df.sort_values("screen_score", ascending=False)
 
     # 5. Take Top K for LLM ranking
@@ -432,6 +474,11 @@ def _df_to_picks(df: pd.DataFrame) -> list[Pick]:
             board_heat_summary=_safe_text(row.get("board_heat_summary")),
             change_60d=_safe_float(row.get("change_60d")),
             signal_score=_safe_float(row.get("signal_score")),
+            change_5d=_safe_float(row.get("change_5d")),
+            change_20d=_safe_float(row.get("change_20d")),
+            change_120d=_safe_float(row.get("change_120d")),
+            roe=_safe_float(row.get("roe")),
+            data_quality_score=_safe_float(row.get("data_quality_score")),
             ma_bullish=_safe_bool(row.get("ma_bullish")),
             price_above_ma20=_safe_bool(row.get("price_above_ma20")),
             macd_status=str(row.get("macd_status", "") or ""),
@@ -529,3 +576,25 @@ def _normalize_code(value: object) -> str:
         return match.group(1)
     digits = "".join(ch for ch in text if ch.isdigit())
     return digits.zfill(6)[-6:] if digits else ""
+
+
+def _compute_data_quality(df: pd.DataFrame) -> pd.Series:
+    """Score data completeness per row (100 = all key fields present, 0 = many missing).
+
+    Key fields: price, change_pct, amount, pe_ratio, pb_ratio, total_mv,
+    turnover_rate, volume_ratio.
+    """
+    key_fields = [
+        "price", "change_pct", "amount", "pe_ratio", "pb_ratio",
+        "total_mv", "turnover_rate", "volume_ratio",
+    ]
+    available = [f for f in key_fields if f in df.columns]
+    if not available:
+        return pd.Series(50.0, index=df.index)
+
+    score = pd.Series(0.0, index=df.index)
+    for field in available:
+        score += df[field].notna().astype(float)
+    # Scale to 0-100
+    max_fields = len(key_fields)
+    return (score / max_fields * 100).round(1).clip(0, 100)

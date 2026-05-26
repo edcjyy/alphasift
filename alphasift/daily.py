@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 
 _DAILY_FEATURE_DEFAULTS = {
     "daily_data_points": pd.NA,
+    "change_5d": pd.NA,
+    "change_20d": pd.NA,
     "change_60d": pd.NA,
+    "change_120d": pd.NA,
     "ma5": pd.NA,
     "ma20": pd.NA,
     "ma60": pd.NA,
@@ -271,6 +274,19 @@ def compute_daily_features(hist: pd.DataFrame) -> dict[str, object]:
     base_close = float(close.iloc[lookback_idx])
     change_60d = (last_close / base_close - 1.0) * 100 if base_close > 0 else None
 
+    # Multi-timeframe momentum: short / medium / long term
+    lookback_5d = max(0, len(close) - 6)
+    base_5d = float(close.iloc[lookback_5d])
+    change_5d = (last_close / base_5d - 1.0) * 100 if base_5d > 0 else None
+
+    lookback_20d = max(0, len(close) - 21)
+    base_20d = float(close.iloc[lookback_20d])
+    change_20d = (last_close / base_20d - 1.0) * 100 if base_20d > 0 else None
+
+    lookback_120d = max(0, len(close) - 121)
+    base_120d = float(close.iloc[lookback_120d])
+    change_120d = (last_close / base_120d - 1.0) * 100 if base_120d > 0 else None
+
     macd_status = _compute_macd_status(close)
     rsi_value = _compute_rsi(close)
     rsi_status = _classify_rsi(rsi_value)
@@ -287,7 +303,10 @@ def compute_daily_features(hist: pd.DataFrame) -> dict[str, object]:
 
     return {
         "daily_data_points": int(len(close)),
+        "change_5d": None if change_5d is None else round(float(change_5d), 4),
+        "change_20d": None if change_20d is None else round(float(change_20d), 4),
         "change_60d": None if change_60d is None else round(float(change_60d), 4),
+        "change_120d": None if change_120d is None else round(float(change_120d), 4),
         "ma5": last_ma5,
         "ma20": last_ma20,
         "ma60": last_ma60,

@@ -83,6 +83,30 @@ def apply_hard_filters(df: pd.DataFrame, filters: HardFilterConfig) -> pd.DataFr
     _filter_min(result, ["consolidation_days_20d"], filters.consolidation_days_20d_min)
     _filter_max(result, ["consolidation_days_20d"], filters.consolidation_days_20d_max)
 
+    # New multi-timeframe momentum filters
+    _filter_min(result, ["change_5d"], filters.change_5d_min)
+    _filter_max(result, ["change_5d"], filters.change_5d_max)
+    _filter_min(result, ["change_20d"], filters.change_20d_min)
+    _filter_max(result, ["change_20d"], filters.change_20d_max)
+    _filter_min(result, ["change_120d"], filters.change_120d_min)
+    _filter_max(result, ["change_120d"], filters.change_120d_max)
+
+    # Limit-up / limit-down exclusion
+    if filters.exclude_limit_up and "change_pct" in result.columns:
+        change = pd.to_numeric(result["change_pct"], errors="coerce")
+        result.drop(result[change >= 9.7].index, inplace=True)
+    if filters.exclude_limit_down and "change_pct" in result.columns:
+        change = pd.to_numeric(result["change_pct"], errors="coerce")
+        result.drop(result[change <= -9.7].index, inplace=True)
+
+    # IPO age filter — exclude stocks listed within N days
+    if filters.exclude_new_ipo_days is not None and filters.exclude_new_ipo_days > 0:
+        _filter_ipo_age(result, filters.exclude_new_ipo_days)
+
+    # Data quality filter
+    if filters.data_quality_min is not None:
+        _filter_min(result, ["data_quality_score"], float(filters.data_quality_min))
+
     return result
 
 
@@ -91,6 +115,12 @@ def requires_daily_features(filters: HardFilterConfig) -> bool:
     return any([
         filters.change_60d_min is not None,
         filters.change_60d_max is not None,
+        filters.change_5d_min is not None,
+        filters.change_5d_max is not None,
+        filters.change_20d_min is not None,
+        filters.change_20d_max is not None,
+        filters.change_120d_min is not None,
+        filters.change_120d_max is not None,
         filters.require_ma_bullish,
         filters.require_price_above_ma20,
         filters.signal_score_min is not None,
@@ -175,3 +205,46 @@ def _filter_in(df: pd.DataFrame, col_name: str, allowed: list[str] | None) -> No
         )
     allowed_set = {str(item) for item in allowed}
     df.drop(df[~df[col_name].astype(str).isin(allowed_set)].index, inplace=True)
+
+
+def _filter_ipo_age(df: pd.DataFrame, min_days: int) -> None:
+    """Exclude stocks listed within the last ``min_days`` days.
+
+    Uses ``list_date`` column if available in snapshot; falls back to
+    Tushare stock_basic if not present but TUSHARE_TOKEN is available.
+    """
+    if df.empty:
+        return
+    from datetime import date, timedelta
+
+    cutoff_date = date.today() - timedelta(days=int(min_days))
+    cutoff_str = cutoff_date.strftime("%Y%m%d")
+
+    if "list_date" in df.columns:
+        list_date = pd.to_datetime(df["list_date"], errors="coerce")
+        df.drop(df[list_date >= pd.Timestamp(cutoff_date)].index, inplace=True)
+        return
+
+    # Fallback: try to fetch list_date from Tushare stock_basic
+    try:
+        import os
+        token = os.getenv("TUSHARE_TOKEN", "").strip() or os.getenv("TUSHARE_API_TOKEN", "").strip()
+        if not token:
+            return  # cannot filter, skip silently
+        import tushare as ts
+        pro = ts.pro_api(token)
+        proxy_url = os.getenv("TUSHARE_API_URL", "").strip()
+        if proxy_url:
+            pro._DataApi__token = token
+            pro._DataApi__http_url = proxy_url
+        basic = pro.stock_basic(exchange="", list_status="L", fields="ts_code,symbol,list_date")
+        if basic is None or basic.empty:
+            return
+        basic["symbol"] = basic["ts_code"].astype(str).str.split(".").str[0].str.zfill(6)
+        recent_ipos = set(
+            basic.loc[pd.to_datetime(basic["list_date"], errors="coerce") >= pd.Timestamp(cutoff_date), "symbol"]
+        )
+        codes_in_df = df["code"].astype(str).str.zfill(6)
+        df.drop(df[codes_in_df.isin(recent_ipos)].index, inplace=True)
+    except Exception:
+        pass  # cannot filter, skip silently

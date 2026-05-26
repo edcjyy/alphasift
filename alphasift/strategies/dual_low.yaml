@@ -18,13 +18,16 @@ screening:
     market_cap_max: 300000000000
     price_min: 3
     price_max: 80
+    exclude_new_ipo_days: 90
   tech_weight: 0.2
   factor_weights:
-    value: 0.55
+    value: 0.45
+    quality: 0.15
     liquidity: 0.15
-    stability: 0.20
+    stability: 0.15
     size: 0.10
   scoring_profile:
+    value_sector_neutral: true
     momentum_chase_start_pct: 2.5
     activity_ideal_volume_ratio: 1.2
     activity_ideal_turnover_rate: 2.0
