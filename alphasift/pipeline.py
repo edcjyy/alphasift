@@ -271,7 +271,7 @@ def screen(
         config.llm_max_candidates,
         len(df),
     )
-    df_top = df.head(top_k)
+    df_top = df.head(top_k).copy()
 
     # 6. Build Pick list
     df_top["data_quality_score"] = _compute_data_quality(df_top)

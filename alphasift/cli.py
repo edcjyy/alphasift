@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 from dataclasses import asdict
+from typing import Any, Dict
 from datetime import datetime
 from pathlib import Path
 
@@ -137,6 +138,7 @@ def main():
     sp.add_argument("--output", default=None, help="额外写出结果到指定路径")
     sp.add_argument("--jsonl", action="store_true", help="以 JSONL 输出")
     sp.add_argument("--explain", action="store_true", help="输出紧凑可读摘要")
+    sp.add_argument("--table", action="store_true", help="以表格格式输出（需要 tabulate）")
 
     # strategies
     sub.add_parser("strategies", help="列出可用策略")
@@ -227,7 +229,9 @@ def main():
             save_screen_result(result, data_dir=config.data_dir)
         if args.output:
             save_screen_result(result, data_dir=config.data_dir, path=args.output, jsonl=args.jsonl)
-        if args.explain:
+        if args.table:
+            print(_format_screen_table(result))
+        elif args.explain:
             print(_format_screen_explain(result))
         elif args.jsonl:
             print("\n".join(screen_result_to_jsonl(result)))
@@ -399,6 +403,61 @@ def _run_quickstart(*, strategy: str = "dual_low", max_output: int = 5) -> None:
     print("   alphasift screen <strategy> --save-run    # 保存运行")
     print("   alphasift evaluate <run_id> --explain     # T+N 评估")
     print("   alphasift strategies                      # 完整策略列表")
+
+
+def _format_screen_table(result: Any) -> str:
+    """Format screen result as a table using tabulate."""
+    try:
+        from tabulate import tabulate
+    except ImportError:
+        return (
+            "Error: tabulate not installed. Install with: pip install tabulate\n"
+            + _format_screen_explain(result)
+        )
+
+    # Build summary lines
+    summary = [
+        f"run_id={result.run_id} strategy={result.strategy} market={result.market}",
+        f"snapshot={result.snapshot_count} after_filter={result.after_filter_count} "
+        f"source={result.snapshot_source or '-'} llm_ranked={result.llm_ranked}",
+    ]
+    if result.llm_market_view:
+        summary.append(f"LLM Market View: {result.llm_market_view}")
+    if result.portfolio_concentration_notes:
+        summary.append("Portfolio Concentration: " + " | ".join(result.portfolio_concentration_notes))
+
+    # Build table rows
+    headers = [
+        "Rank", "Code", "Name", "Final", "Screen", "LLM",
+        "Price", "Change%", "PE", "PB", "ROE",
+        "Value", "Momentum", "Quality", "Risk",
+        "Sector", "Reason"
+    ]
+    rows = []
+    for pick in result.picks:
+        factor = pick.factor_scores or {}
+        rows.append([
+            pick.rank,
+            pick.code,
+            pick.name,
+            f"{pick.final_score:.1f}",
+            f"{pick.screen_score:.1f}",
+            f"{pick.llm_score or '-'}" if pick.llm_score else "-",
+            f"{pick.price:.2f}" if pick.price else "-",
+            f"{pick.change_pct:.2f}" if pick.change_pct else "-",
+            f"{pick.pe_ratio:.1f}" if pick.pe_ratio else "-",
+            f"{pick.pb_ratio:.2f}" if pick.pb_ratio else "-",
+            f"{pick.roe:.1f}" if pick.roe else "-",
+            f"{factor.get('value', 0):.0f}",
+            f"{factor.get('momentum', 0):.0f}",
+            f"{factor.get('quality', 0):.0f}",
+            pick.risk_level or "-",
+            pick.llm_sector or pick.industry or "-",
+            (pick.ranking_reason or pick.llm_thesis or "")[:40],
+        ])
+
+    table = tabulate(rows, headers=headers, tablefmt="grid", numalign="right")
+    return "\n".join(summary) + "\n\n" + table
 
 
 def _format_screen_explain(result) -> str:
