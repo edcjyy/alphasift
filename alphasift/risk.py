@@ -42,7 +42,7 @@ _DEFAULT_PORTFOLIO_BUCKETS = {
 def apply_risk_overlay(
     picks: list[Pick],
     *,
-    max_penalty: float = 12.0,
+    max_penalty: float = 16.0,
     veto_high_risk: bool = False,
     profile: dict[str, object] | None = None,
 ) -> tuple[list[Pick], list[str]]:
@@ -78,7 +78,7 @@ def apply_risk_overlay(
 def apply_portfolio_overlay(
     picks: list[Pick],
     *,
-    max_same_sector: int = 1,
+    max_same_sector: int = 2,
     concentration_penalty: float = 4.0,
     profile: dict[str, object] | None = None,
 ) -> tuple[list[Pick], list[str]]:

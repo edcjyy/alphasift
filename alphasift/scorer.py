@@ -25,7 +25,7 @@ _DEFAULT_SCORING_PROFILE = {
     "momentum_downside_penalty_slope": 3.0,
     "momentum_60d_base": 55.0,
     "momentum_60d_slope": 0.9,
-    "momentum_60d_overheat_pct": 45.0,
+    "momentum_60d_overheat_pct": 55.0,
     "momentum_60d_overheat_penalty_slope": 0.8,
     "momentum_60d_breakdown_pct": -20.0,
     "momentum_60d_breakdown_penalty_slope": 0.7,
@@ -89,7 +89,7 @@ _DEFAULT_SCORING_PROFILE = {
     "stability_high_turnover_penalty_slope": 2.0,
     "stability_high_volume_ratio": 5.0,
     "stability_high_volume_ratio_penalty_slope": 4.0,
-    "stability_invalid_pe_penalty": 18.0,
+    "stability_invalid_pe_penalty": 12.0,
     "theme_heat_unknown_score": 50.0,
     "theme_heat_change_slope": 6.0,
     "theme_heat_rank_bonus": 10.0,
@@ -149,13 +149,20 @@ def factor_score_columns() -> dict[str, str]:
 
 def _normalized_factor_weights(config: ScreeningConfig) -> dict[str, float]:
     """Use explicit factor weights, or derive a sane legacy default from tech_weight."""
+    tw = config.tech_weight
     raw_weights = config.factor_weights or {
-        "value": (1 - config.tech_weight) * 0.45,
-        "liquidity": (1 - config.tech_weight) * 0.20,
-        "stability": (1 - config.tech_weight) * 0.20,
-        "quality": (1 - config.tech_weight) * 0.15,
-        "momentum": config.tech_weight * 0.50,
-        "activity": config.tech_weight * 0.50,
+        # Fundamental cluster (weight = 1 - tech_weight)
+        "value": (1 - tw) * 0.35,
+        "liquidity": (1 - tw) * 0.15,
+        "stability": (1 - tw) * 0.15,
+        "quality": (1 - tw) * 0.15,
+        "size": (1 - tw) * 0.10,
+        # Technical cluster (weight = tech_weight)
+        "momentum": tw * 0.40,
+        "activity": tw * 0.35,
+        # Cross-cluster factors (split between clusters)
+        "reversal": 0.04,
+        "theme_heat": 0.06,
     }
     weights = {
         factor: max(float(weight), 0.0)

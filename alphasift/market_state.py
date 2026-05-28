@@ -143,10 +143,10 @@ def _classify_regime(state: MarketState) -> None:
     adjustments: dict[str, float] = {}
 
     # Determine regime
-    above_ma20 = state.index_vs_ma20_pct > 1.0
-    below_ma20 = state.index_vs_ma20_pct < -2.0
-    breadth_strong = state.breadth_ratio > 1.3
-    breadth_weak = state.breadth_ratio < 0.6
+    above_ma20 = state.index_vs_ma20_pct > 0.5
+    below_ma20 = state.index_vs_ma20_pct < -1.5
+    breadth_strong = state.breadth_ratio > 1.0
+    breadth_weak = state.breadth_ratio < 0.7
     volume_spike = state.volume_deviation_pct > 30
 
     if above_ma20 and breadth_strong:
