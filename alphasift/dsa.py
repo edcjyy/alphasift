@@ -119,14 +119,19 @@ def call_dsa_analysis(
         # but we keep it in the payload for forward compatibility.
         payload["query_id"] = query_id
 
+    logger.info(
+        "DSA 调用开始: stock=%s name=%s endpoint=%s timeout=%.0fs",
+        stock_code, stock_name or "-", endpoint, timeout_sec,
+    )
     response = requests.post(endpoint, json=payload, timeout=timeout_sec)
     response.raise_for_status()
     try:
         body = response.json()
     except ValueError:
-        return {"raw_text": response.text}
+        body = {"raw_text": response.text}
     if not isinstance(body, dict):
-        return {"raw_result": body}
+        body = {"raw_result": body}
+    logger.info("DSA 调用完成: stock=%s keys=%s", stock_code, list(body.keys())[:5])
     return body
 
 
