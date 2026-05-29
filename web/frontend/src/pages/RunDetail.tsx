@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { ArrowLeft, BarChart3 } from 'lucide-react';
-import apiClient from '@/api';
+import { apiGet } from '@/api';
 import type { RunDetail } from '@/types';
 import PickTable from '@/components/PickTable';
 
@@ -26,14 +26,15 @@ export default function RunDetail() {
   useEffect(() => {
     if (!runId) return;
     setLoading(true);
-    apiClient
-      .get<{run_id: string; result: any}>(`/api/v1/runs/${runId}`)
+    // 后端返回 { run_id: string; result: RunDetail }
+    apiGet<{ run_id: string; result: any }>(`/api/v1/runs/${runId}`)
       .then((data) => {
         const r = data.result as RunDetail;
         setRun({
           ...r,
           run_id: data.run_id || runId,
           created_at: r.created || r.created_at || '',
+          picks: r.picks || [],
         } as RunDetail);
       })
       .catch(() => {})
@@ -123,8 +124,8 @@ export default function RunDetail() {
                 outerRadius={100}
                 paddingAngle={2}
                 dataKey="value"
-                label={({ name, percent }) =>
-                  `${name} ${(percent * 100).toFixed(0)}%`
+                label={({ name, percent }: { name?: string; percent?: number }) =>
+                  `${name ?? '?'} ${((percent ?? 0) * 100).toFixed(0)}%`
                 }
                 labelLine={false}
               >

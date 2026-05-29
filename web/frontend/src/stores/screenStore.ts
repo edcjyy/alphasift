@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import apiClient from '@/api';
+import { apiPost } from '@/api';
 import type { RunDetail, ScreenParams } from '@/types';
 
 interface ScreenStore {
@@ -18,13 +18,14 @@ export const useScreenStore = create<ScreenStore>((set) => ({
   startScreen: async (params: ScreenParams) => {
     set({ isScreening: true, error: null });
     try {
-      const data = await apiClient.post<{run_id: string | null; result: any}>('/api/v1/screen', params);
-      // 解包后端返回的 {run_id, result} 结构
+      // 后端返回 { run_id: string; result: RunDetail }
+      const data = await apiPost<{ run_id: string | null; result: any }>('/api/v1/screen', params);
       const result = data.result as RunDetail;
       const runDetail: RunDetail = {
         ...result,
         run_id: data.run_id || result.run_id || '',
         created_at: result.created || result.created_at || '',
+        picks: result.picks || [],
       };
       set({ currentResult: runDetail, isScreening: false });
     } catch (err) {

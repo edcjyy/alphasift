@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Loader2, AlertCircle } from 'lucide-react';
 import { useScreenStore } from '@/stores/screenStore';
-import apiClient from '@/api';
+import { apiGet } from '@/api';
 import type { StrategySummary } from '@/types';
 import PickTable from '@/components/PickTable';
 
@@ -19,8 +19,7 @@ export default function Screen() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    apiClient
-      .get<StrategySummary[]>('/api/v1/strategies')
+    apiGet<StrategySummary[]>('/api/v1/strategies')
       .then((data) => {
         setStrategies(data);
         if (data.length > 0) setStrategy(data[0]!.name);

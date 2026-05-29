@@ -8,7 +8,7 @@ import {
   Activity,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import apiClient from '@/api';
+import { apiGet } from '@/api';
 import type { HealthResponse } from '@/types';
 
 const navItems = [
@@ -23,8 +23,7 @@ export default function Layout() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
 
   useEffect(() => {
-    apiClient
-      .get<HealthResponse>('/api/v1/system/health')
+    apiGet<HealthResponse>('/api/v1/system/health')
       .then(setHealth)
       .catch(() => {});
   }, []);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
-import apiClient from '@/api';
+import { apiGet } from '@/api';
 import type { RunSummary } from '@/types';
 
 export default function RunList() {
@@ -12,10 +12,9 @@ export default function RunList() {
 
   const fetchRuns = (s?: string) => {
     setLoading(true);
-    apiClient
-      .get<RunSummary[]>('/api/v1/runs', {
-        params: { limit: 50, strategy: s || undefined },
-      })
+    apiGet<RunSummary[]>('/api/v1/runs', {
+      params: { limit: 50, strategy: s || undefined },
+    })
       .then(setRuns)
       .catch(() => {})
       .finally(() => setLoading(false));

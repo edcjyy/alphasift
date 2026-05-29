@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, ExternalLink } from 'lucide-react';
-import apiClient from '@/api';
+import { apiGet } from '@/api';
 import type { RunSummary, HealthResponse } from '@/types';
 
 export default function Dashboard() {
@@ -10,12 +10,10 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    apiClient
-      .get<RunSummary[]>('/api/v1/runs', { params: { limit: 5 } })
+    apiGet<RunSummary[]>('/api/v1/runs', { params: { limit: 5 } })
       .then(setRuns)
       .catch(() => {});
-    apiClient
-      .get<HealthResponse>('/api/v1/system/health')
+    apiGet<HealthResponse>('/api/v1/system/health')
       .then(setHealth)
       .catch(() => {});
   }, []);

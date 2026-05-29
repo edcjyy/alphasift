@@ -10,7 +10,7 @@ import {
   Cell,
 } from 'recharts';
 import { ArrowLeft, Loader2 } from 'lucide-react';
-import apiClient from '@/api';
+import { apiPost } from '@/api';
 import type { EvaluateResult } from '@/types';
 import { cn } from '@/utils/cn';
 
@@ -25,10 +25,10 @@ export default function Evaluate() {
     if (!runId) return;
     setLoading(true);
     setError('');
-    apiClient
-      .post<{run_id: string; result: any}>(`/api/v1/evaluate/${runId}`, {
-        with_price_path: true,
-      })
+    // 后端返回 { run_id: string; result: EvaluateResult }
+    apiPost<{ run_id: string; result: any }>(`/api/v1/evaluate/${runId}`, {
+      with_price_path: true,
+    })
       .then((data) => {
         setResult(data.result as EvaluateResult);
       })
@@ -122,10 +122,10 @@ export default function Evaluate() {
                 />
                 <YAxis
                   tick={{ fill: '#9ca3af', fontSize: 12 }}
-                  tickFormatter={(v: number) => `${v}%`}
+                  tickFormatter={(v) => `${v}%`}
                 />
                 <Tooltip
-                  formatter={(value: number) => [`${value.toFixed(2)}%`, '收益率']}
+                  formatter={(v) => [`${(v as number).toFixed(2)}%`, '收益率']}
                   contentStyle={{
                     background: '#1e1e2e',
                     border: '1px solid #2e2e42',

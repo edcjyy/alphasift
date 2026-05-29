@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Layers } from 'lucide-react';
-import apiClient from '@/api';
+import { apiGet } from '@/api';
 import type { StrategySummary } from '@/types';
 
 export default function Strategies() {
@@ -8,8 +8,7 @@ export default function Strategies() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiClient
-      .get<StrategySummary[]>('/api/v1/strategies')
+    apiGet<StrategySummary[]>('/api/v1/strategies')
       .then(setStrategies)
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -34,20 +33,20 @@ export default function Strategies() {
               className="bg-surface rounded-xl border border-border p-5 hover:border-accent/50 transition-colors"
             >
               <div className="flex items-start justify-between">
-                <h3 className="font-semibold text-lg">{s.display_name}</h3>
+                <h3 className="font-semibold text-lg">{s.display_name ?? s.name}</h3>
                 <span className="text-xs text-gray-500 bg-surface-active px-2 py-0.5 rounded">
-                  v{s.version}
+                  v{s.version ?? '?'}
                 </span>
               </div>
-              <p className="text-gray-400 text-sm mt-2">{s.description}</p>
+              <p className="text-gray-400 text-sm mt-2">{s.description ?? ''}</p>
               <div className="flex items-center gap-2 mt-3">
                 <span className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded">
-                  {s.category}
+                  {s.category ?? '未分类'}
                 </span>
               </div>
-              {s.tags.length > 0 && (
+              {(s.tags?.length ?? 0) > 0 && (
                 <div className="flex gap-1.5 flex-wrap mt-3">
-                  {s.tags.map((tag) => (
+                  {s.tags!.map((tag) => (
                     <span
                       key={tag}
                       className="text-xs bg-surface-active text-gray-300 px-2 py-0.5 rounded"

@@ -123,3 +123,23 @@ export interface ScreenParams {
   explain?: boolean;
   context?: string;
 }
+
+// ---------------------------------------------------------------------------
+// 环境变量配置
+// ---------------------------------------------------------------------------
+export interface EnvEntry {
+  key: string;
+  value: string;
+  masked: boolean;
+}
+
+export interface EnvUpdateRequest {
+  changes: Record<string, string>;
+}
+
+export interface EnvUpdateResponse {
+  status: string;
+  updated: string[];
+  requires_restart: boolean;
+  message: string;
+}
