@@ -1,0 +1,85 @@
+name: Docker Build & Publish
+
+on:
+  push:
+    branches: [main, main2]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: '自定义镜像标签 (如 v1.0.0, latest)'
+        required: false
+        default: 'latest'
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GHCR_REGISTRY: ghcr.io
+  GHCR_IMAGE: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image tags
+        id: tags
+        run: |
+          TAGS="type=raw,value=latest"
+          TAGS="$TAGS"$'\n'"type=sha,format=short"
+          TAGS="$TAGS"$'\n'"type=ref,event=branch"
+          if [[ -n "${{ inputs.image_tag }}" ]]; then
+            TAGS="$TAGS"$'\n'"type=raw,value=${{ inputs.image_tag }}"
+          fi
+          echo "tags<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAGS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE }}
+          tags: ${{ steps.tags.outputs.tags }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: web/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Publish summary
+        run: |
+          echo "### Docker 镜像已发布" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 镜像 | Tag |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|-----|" >> "$GITHUB_STEP_SUMMARY"
+          for tag in $(echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n'); do
+            echo "| \`${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE }}\` | \`${tag##*:}\` |" >> "$GITHUB_STEP_SUMMARY"
+          done

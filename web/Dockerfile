@@ -37,7 +37,8 @@ RUN pip install --no-cache-dir "." && \
 COPY alphasift/ alphasift/
 COPY strategies/ strategies/
 
-# Web API 层（含日志配置）
+# Web 层（__init__.py + API + logging_config）
+COPY web/__init__.py web/
 COPY web/api/ web/api/
 COPY web/logging_config.py web/
 
