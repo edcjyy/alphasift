@@ -3,7 +3,7 @@
 
 from fastapi import APIRouter
 
-from .endpoints import evaluate, runs, schedule, screen, strategies, system
+from .endpoints import evaluate, runs, schedule, screen, stock, strategies, system
 
 router = APIRouter(prefix="/api/v1")
 
@@ -14,3 +14,4 @@ router.include_router(evaluate.router)
 router.include_router(strategies.router)
 router.include_router(system.router)
 router.include_router(schedule.router)
+router.include_router(stock.router)

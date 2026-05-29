@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { Pick } from '@/types';
 import { cn } from '@/utils/cn';
+import StockChartModal from './StockChartModal';
 
 function FactorRadar({ scores }: { scores: Record<string, number> }) {
   const keys = Object.keys(scores);
@@ -36,7 +38,10 @@ function RiskTags({ flags }: { flags: string[] }) {
 }
 
 export default function PickTable({ picks }: { picks: Pick[] }) {
+  const [chartStock, setChartStock] = useState<{ code: string; name: string } | null>(null);
+
   return (
+    <>
     <div className="overflow-auto">
       <table className="w-full text-sm">
         <thead className="text-left text-gray-500 border-b border-border sticky top-0 bg-surface">
@@ -51,7 +56,7 @@ export default function PickTable({ picks }: { picks: Pick[] }) {
             <th className="px-3 py-2">行业</th>
             <th className="px-3 py-2">因子雷达</th>
             <th className="px-3 py-2">风险标签</th>
-            <th className="px-3 py-2 w-20">操作</th>
+            <th className="px-3 py-2 w-28">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -83,17 +88,33 @@ export default function PickTable({ picks }: { picks: Pick[] }) {
                 <RiskTags flags={p.risk_flags} />
               </td>
               <td className="px-3 py-2">
-                <button
-                  onClick={() => window.open(`http://192.168.31.100:19500/chat?stock=${p.code}`, '_blank')}
-                  className="text-xs text-accent hover:text-accent-hover"
-                >
-                  深度分析
-                </button>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => setChartStock({ code: p.code, name: p.name })}
+                    className="text-xs text-blue-400 hover:text-blue-300 px-1.5 py-0.5 rounded hover:bg-surface-active"
+                  >
+                    K线
+                  </button>
+                  <button
+                    onClick={() => window.open(`http://192.168.31.100:19500/chat?stock=${p.code}`, '_blank')}
+                    className="text-xs text-accent hover:text-accent-hover px-1.5 py-0.5 rounded hover:bg-surface-active"
+                  >
+                    深度分析
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+    {chartStock && (
+      <StockChartModal
+        code={chartStock.code}
+        name={chartStock.name}
+        onClose={() => setChartStock(null)}
+      />
+    )}
+    </>
   );
 }

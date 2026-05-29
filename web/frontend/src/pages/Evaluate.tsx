@@ -1,18 +1,13 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { apiPost } from '@/api';
 import type { EvaluateResult } from '@/types';
 import { cn } from '@/utils/cn';
+import StockChartModal from '@/components/StockChartModal';
 
 export default function Evaluate() {
   const { runId } = useParams<{ runId: string }>();
@@ -20,6 +15,7 @@ export default function Evaluate() {
   const [result, setResult] = useState<EvaluateResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [chartStock, setChartStock] = useState<{ code: string; name: string } | null>(null);
 
   const handleEvaluate = () => {
     if (!runId) return;
@@ -158,6 +154,7 @@ export default function Evaluate() {
                   <th className="px-4 py-2">收益率</th>
                   <th className="px-4 py-2">最大回撤</th>
                   <th className="px-4 py-2">胜负</th>
+                  <th className="px-4 py-2 w-12"></th>
                 </tr>
               </thead>
               <tbody>
@@ -196,12 +193,27 @@ export default function Evaluate() {
                         {r.win ? '盈利' : '亏损'}
                       </span>
                     </td>
+                    <td className="px-4 py-2">
+                      <button
+                        onClick={() => setChartStock({ code: r.code, name: r.name })}
+                        className="text-xs text-blue-400 hover:text-blue-300 px-1.5 py-0.5 rounded hover:bg-surface-active"
+                      >
+                        K线
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </>
+      )}
+      {chartStock && (
+        <StockChartModal
+          code={chartStock.code}
+          name={chartStock.name}
+          onClose={() => setChartStock(null)}
+        />
       )}
     </div>
   );
