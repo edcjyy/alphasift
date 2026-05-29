@@ -1,17 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
-  Activity,
-  Database,
-  Brain,
-  Server,
-  Settings as SettingsIcon,
-  Terminal,
-  Save,
-  RefreshCw,
-  AlertTriangle,
-  CheckCircle,
-  Info,
-  Layers,
+  Activity, Database, Brain, Server,
+  Settings as SettingsIcon, Terminal,
+  Save, RefreshCw, AlertTriangle, CheckCircle, Info, Layers,
+  Eye, EyeOff,
 } from 'lucide-react';
 import { apiGet, fetchEnv, updateEnv } from '@/api';
 import type { HealthResponse, EnvEntry, EnvUpdateResponse } from '@/types';
@@ -138,6 +130,7 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState<'health' | 'env'>('health');
   const [activeGroup, setActiveGroup] = useState(0);
   const [restartFlag, setRestartFlag] = useState(false);
+  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
 
   // 加载数据
   useEffect(() => {
@@ -206,6 +199,15 @@ export default function Settings() {
   }
 
   // 渲染单个字段
+  /** 切换敏感字段明文/密文 */
+  function toggleKeyVisible(key: string) {
+    setVisibleKeys((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
   function renderField(key: string) {
     const entry = envEntries.find((e) => e.key === key);
     if (!entry) return null;
@@ -229,13 +231,22 @@ export default function Settings() {
             <option value="false">false</option>
           </select>
         ) : masked ? (
-          <input
-            type="password"
-            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm font-mono"
-            value={envDraft[key]}
-            placeholder="输入新值（留空则不修改）"
-            onChange={(e) => setEnvDraft((d) => ({ ...d, [key]: e.target.value }))}
-          />
+          <div className="relative">
+            <input
+              type={visibleKeys.has(key) ? 'text' : 'password'}
+              className="w-full bg-surface border border-border rounded-lg px-3 py-2 pr-10 text-sm font-mono"
+              value={envDraft[key]}
+              placeholder="输入新值（留空则不修改）"
+              onChange={(e) => setEnvDraft((d) => ({ ...d, [key]: e.target.value }))}
+            />
+            <button
+              onClick={() => toggleKeyVisible(key)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              type="button"
+            >
+              {visibleKeys.has(key) ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
         ) : (
           <input
             className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm font-mono"
