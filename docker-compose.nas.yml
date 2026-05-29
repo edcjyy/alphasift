@@ -21,9 +21,13 @@ services:
       - alphasift-data:/app/data
       - alphasift-logs:/app/logs
       - ./.env:/app/.env:ro
+      # 自定义策略目录挂载（NAS 上放 yaml 文件即可自动加载）
+      # 如果不需要自定义策略，注释掉下面两行即可（容器内使用内置策略）
+      - alphasift-strategies:/app/strategies
     environment:
       - ALPHASIFT_DATA_DIR=/app/data
       - LOG_DIR=/app/logs
+      - STRATEGIES_DIR=/app/strategies
       # DSA 联动：DSA_API_URL 从 .env 读取
       - DSA_API_URL=${DSA_API_URL:-http://host.docker.internal:8000}
     # host 网络模式，可直接访问 NAS 上的其他服务
