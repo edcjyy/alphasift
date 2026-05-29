@@ -40,7 +40,6 @@ export default function Strategies() {
       const res = await apiPost<{ ok: boolean; name: string; message: string }>(
         '/api/v1/strategies/upload',
         formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } },
       );
       showMsg('success', `策略 "${res.name}" 已上传`);
       setPendingChange(true);
