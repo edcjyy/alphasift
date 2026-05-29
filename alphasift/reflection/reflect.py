@@ -38,6 +38,7 @@ def reflect_on_evaluation(
     apply: bool = False,
     dry_run: bool = False,
     min_confidence: float = 0.5,
+    auto_reevaluate: bool = False,
 ) -> ReflectionResult:
     """Run reflection analysis on a saved evaluation run.
 
@@ -216,5 +217,43 @@ def reflect_on_evaluation(
             logger.info("Reflection saved to experience store")
         except Exception as e:
             logger.warning("Failed to save reflection: %s", e)
+
+    # 8. Auto re-evaluate: screen + evaluate with new strategy
+    if auto_reevaluate and apply and not dry_run and critic_result.passed:
+        try:
+            logger.info("Auto re-evaluating with modified strategy: %s", strategy_name)
+            from alphasift.pipeline import screen as run_screen
+            new_result = run_screen(strategy_name, max_output=5, use_llm=False, save_run=True)
+            if new_result and new_result.run_id:
+                from alphasift.evaluate import evaluate_saved_run
+                from alphasift.store import save_evaluation_result
+                eval_result2 = evaluate_saved_run(new_result.run_id, config=config)
+                save_evaluation_result(eval_result2, data_dir=data_dir)
+
+                # Update outcome in experience store
+                improved = (
+                    eval_result2.win_rate is not None
+                    and result.win_rate is not None
+                    and eval_result2.win_rate > result.win_rate
+                )
+                from alphasift.reflection.experience import update_outcome
+                # Find the last saved record for this strategy
+                records = get_history(strategy_name, data_dir=data_dir, limit=1)
+                if records:
+                    update_outcome(
+                        records[0]["id"], data_dir=data_dir,
+                        after_run_id=new_result.run_id,
+                        win_rate_after=eval_result2.win_rate,
+                        avg_return_after=eval_result2.average_return_pct,
+                        improved=improved,
+                    )
+                logger.info(
+                    "Auto re-evaluate: win_rate %.1f%% → %.1f%% (%s)",
+                    (result.win_rate or 0) * 100,
+                    (eval_result2.win_rate or 0) * 100,
+                    "improved" if improved else "no improvement",
+                )
+        except Exception as e:
+            logger.warning("Auto re-evaluate failed: %s", e)
 
     return result

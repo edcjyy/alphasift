@@ -23,6 +23,8 @@ class ReflectionRequest(BaseModel):
     apply: bool = False
     dry_run: bool = False
     min_confidence: float = 0.5
+    auto_reevaluate: bool = False
+    max_rounds: int = 1  # >1 = multi-round evolution
 
 
 class StrategyChangeOut(BaseModel):
@@ -190,3 +192,76 @@ async def reflection_meta_learn():
         ],
         recommendations=result.recommendations,
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /reflection/sensitivity/{strategy} — parameter sensitivity analysis
+# ---------------------------------------------------------------------------
+
+@router.get("/reflection/sensitivity/{strategy}", response_model=list[dict])
+async def reflection_sensitivity(strategy: str):
+    """参数敏感性分析：发现哪些参数对策略影响最大。"""
+    from alphasift.config import Config
+    from alphasift.reflection.sensitivity import analyze_sensitivity
+
+    config = Config.from_env()
+    strategy_path = config.strategies_dir / f"{strategy}.yaml"
+    if not strategy_path.exists():
+        raise HTTPException(status_code=404, detail=f"策略文件不存在: {strategy}.yaml")
+
+    reports = await run_in_threadpool(analyze_sensitivity, strategy_path)
+
+    return [
+        {
+            "parameter": r.parameter,
+            "base_value": r.base_value,
+            "sensitivity_score": r.sensitivity_score,
+            "recommendation": r.recommendation,
+            "perturbations": r.perturbations,
+        }
+        for r in reports
+    ]
+
+
+# ---------------------------------------------------------------------------
+# GET /reflection/versions/{strategy} — list strategy versions
+# ---------------------------------------------------------------------------
+
+@router.get("/reflection/versions/{strategy}", response_model=list[dict])
+async def reflection_versions(strategy: str):
+    """列出策略的所有版本快照。"""
+    from alphasift.config import Config
+    from alphasift.reflection.mutator import list_versions
+
+    config = Config.from_env()
+    strategy_path = config.strategies_dir / f"{strategy}.yaml"
+    if not strategy_path.exists():
+        raise HTTPException(status_code=404, detail=f"策略文件不存在: {strategy}.yaml")
+
+    return await run_in_threadpool(list_versions, strategy_path)
+
+
+# ---------------------------------------------------------------------------
+# POST /reflection/rollback/{strategy} — rollback strategy
+# ---------------------------------------------------------------------------
+
+class RollbackRequest(BaseModel):
+    to_version: int | None = None
+
+@router.post("/reflection/rollback/{strategy}", response_model=dict)
+async def reflection_rollback(strategy: str, req: RollbackRequest = RollbackRequest()):
+    """回滚策略到指定版本。"""
+    from alphasift.config import Config
+    from alphasift.reflection.mutator import rollback_strategy
+
+    config = Config.from_env()
+    strategy_path = config.strategies_dir / f"{strategy}.yaml"
+    if not strategy_path.exists():
+        raise HTTPException(status_code=404, detail=f"策略文件不存在: {strategy}.yaml")
+
+    result = await run_in_threadpool(
+        rollback_strategy, strategy_path, req.to_version,
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
