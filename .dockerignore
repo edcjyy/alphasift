@@ -26,9 +26,12 @@ web/frontend/.vite
 *.swp
 *.swo
 
-# Docs
+# Docs (but SKILL.md is required by pyproject.toml data-files)
 docs
 *.md
+!SKILL.md
+!.env.example
+!LICENSE
 
 # Docker
 docker-compose*.yml
