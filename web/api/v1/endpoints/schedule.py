@@ -249,8 +249,15 @@ async def run_task_now(task_id: str):
             max_output=t.max_output,
             use_llm=t.use_llm,
             daily_enrich=t.daily_enrich,
-            save_run=t.save_run,
         )
+        if t.save_run:
+            from alphasift.store import save_screen_result
+            from alphasift.config import Config
+            config = Config.from_env()
+            try:
+                save_screen_result(result, data_dir=config.data_dir)
+            except Exception as exc:
+                logger.warning("Schedule save failed: %s", exc)
         async with _lock:
             if task_id in _tasks:
                 _tasks[task_id].last_run_at = datetime.now(timezone.utc).isoformat()

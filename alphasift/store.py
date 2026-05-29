@@ -97,7 +97,7 @@ def list_saved_runs(*, data_dir: Path, limit: int = 20) -> list[dict[str, object
             "strategy": data.get("strategy", ""),
             "market": data.get("market", ""),
             "created_at": data.get("created_at", ""),
-            "picks": len(data.get("picks", []) or []),
+            "picks_count": len(data.get("picks", []) or []),
             "path": str(path),
         })
         if len(items) >= limit:

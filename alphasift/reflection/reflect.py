@@ -223,8 +223,10 @@ def reflect_on_evaluation(
         try:
             logger.info("Auto re-evaluating with modified strategy: %s", strategy_name)
             from alphasift.pipeline import screen as run_screen
-            new_result = run_screen(strategy_name, max_output=5, use_llm=False, save_run=True)
+            new_result = run_screen(strategy_name, max_output=5, use_llm=False)
             if new_result and new_result.run_id:
+                from alphasift.store import save_screen_result
+                save_screen_result(new_result, data_dir=data_dir)
                 from alphasift.evaluate import evaluate_saved_run
                 from alphasift.store import save_evaluation_result
                 eval_result2 = evaluate_saved_run(new_result.run_id, config=config)
