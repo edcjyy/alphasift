@@ -88,6 +88,7 @@ ENV_WHITELIST = {
     "EVALUATION_PRICE_PATH_LOOKBACK_DAYS",
     # data dir
     "ALPHASIFT_DATA_DIR",
+    "LOG_DIR",
     "STRATEGIES_DIR",
     # industry
     "INDUSTRY_MAP_FILES",

@@ -38,6 +38,13 @@ def create_app(static_dir: str | None = None) -> FastAPI:
         version="1.0.0",
     )
 
+    # ── 初始化文件日志（Docker 部署时 LOG_DIR 挂载到 NAS） ──
+    try:
+        from web.logging_config import setup_logging
+        setup_logging()
+    except Exception:
+        pass  # 非 web 包安装环境（CLI 模式）静默跳过
+
     # --------------------------------------------------------------------------
     # CORS 中间件（内网工具，允许所有来源）
     # --------------------------------------------------------------------------

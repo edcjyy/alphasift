@@ -19,10 +19,12 @@ services:
       - "${ALPHASIFT_PORT:-8080}:8080"
     volumes:
       - alphasift-data:/app/data
+      - alphasift-logs:/app/logs
       - ./.env:/app/.env:ro
     environment:
       - ALPHASIFT_DATA_DIR=/app/data
-      # DSA 联动：使用 host 网络模式访问宿主机上的 DSA
+      - LOG_DIR=/app/logs
+      # DSA 联动：DSA_API_URL 从 .env 读取
       - DSA_API_URL=${DSA_API_URL:-http://host.docker.internal:8000}
     # host 网络模式，可直接访问 NAS 上的其他服务
     network_mode: host
@@ -37,4 +39,6 @@ services:
 
 volumes:
   alphasift-data:
+    driver: local
+  alphasift-logs:
     driver: local

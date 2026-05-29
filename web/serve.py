@@ -70,6 +70,10 @@ def main():
 
     import uvicorn
     from web.api.app import create_app
+    from web.logging_config import setup_logging
+
+    # 初始化日志系统（控制台 INFO + 文件 DEBUG）
+    setup_logging()
 
     # 开发模式：不使用静态文件，由 Vite dev server 提供前端
     app = create_app(static_dir=None)

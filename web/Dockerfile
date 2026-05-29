@@ -37,14 +37,15 @@ RUN pip install --no-cache-dir "." && \
 COPY alphasift/ alphasift/
 COPY strategies/ strategies/
 
-# Web API 层
+# Web API 层（含日志配置）
 COPY web/api/ web/api/
+COPY web/logging_config.py web/
 
 # 前端构建产物（来自 Stage 1）
 COPY --from=frontend-builder /app/web/frontend/dist web/static/
 
-# 数据目录
-RUN mkdir -p /app/data/runs /app/data/reports
+# 数据目录 + 日志目录
+RUN mkdir -p /app/data/runs /app/data/reports /app/logs
 
 # 非 root 用户
 RUN groupadd -g 1000 alphasift && \
@@ -54,6 +55,7 @@ USER alphasift
 
 # 环境变量
 ENV ALPHASIFT_DATA_DIR=/app/data
+ENV LOG_DIR=/app/logs
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8080
