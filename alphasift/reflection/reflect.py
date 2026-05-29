@@ -18,6 +18,11 @@ import logging
 from pathlib import Path
 
 from alphasift.reflection.analyzer import analyze_evaluation
+from alphasift.reflection.critic import validate_changes
+from alphasift.reflection.experience import (
+    get_change_history,
+    save_reflection,
+)
 from alphasift.reflection.models import ReflectionResult
 from alphasift.reflection.mutator import apply_changes
 
@@ -147,13 +152,48 @@ def reflect_on_evaluation(
     result.run_id = run_id
     result.evaluated_at = eval_result.evaluated_at
 
-    # 5. Apply changes if requested
-    if (apply or dry_run) and result.changes and yaml_path:
+    # 5. Critic: validate changes before applying
+    category = "framework"
+    if yaml_path:
+        try:
+            import yaml
+            data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+            category = data.get("category", "framework") if isinstance(data, dict) else "framework"
+        except Exception:
+            pass
+
+    # Load change history for duplication check
+    history = {}
+    if data_dir:
+        try:
+            history = get_change_history(strategy_name, data_dir=data_dir)
+        except Exception:
+            logger.debug("Could not load change history (first run?)", exc_info=True)
+
+    critic_result = validate_changes(
+        changes=result.changes,
+        strategy_category=category,
+        strategy_name=strategy_name,
+        history=history,
+        min_confidence=min_confidence,
+    )
+
+    logger.info(
+        "Critic: passed=%d warned=%d rejected=%d score=%.2f",
+        len(critic_result.passed),
+        len(critic_result.warned),
+        len(critic_result.rejected),
+        critic_result.score,
+    )
+
+    # 6. Mutator: apply validated changes
+    mutation_result = {"applied": [], "skipped": []}
+    if (apply or dry_run) and critic_result.passed and yaml_path:
         mutation_result = apply_changes(
             strategy_path=yaml_path,
-            changes=result.changes,
+            changes=critic_result.passed,
             dry_run=dry_run,
-            min_confidence=min_confidence,
+            min_confidence=0.0,  # Already validated by critic
             auto_backup=not dry_run,
         )
         logger.info(
@@ -161,5 +201,20 @@ def reflect_on_evaluation(
             len(mutation_result["applied"]),
             len(mutation_result["skipped"]),
         )
+
+    # 7. Experience: save reflection record
+    if data_dir and not dry_run:
+        try:
+            save_reflection(
+                result,
+                data_dir=data_dir,
+                strategy_category=category,
+                critic_score=critic_result.score,
+                passed_count=len(critic_result.passed),
+                rejected_count=len(critic_result.rejected),
+            )
+            logger.info("Reflection saved to experience store")
+        except Exception as e:
+            logger.warning("Failed to save reflection: %s", e)
 
     return result

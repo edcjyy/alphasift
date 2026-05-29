@@ -25,6 +25,7 @@ from alphasift.store import (
 )
 from alphasift.strategy import list_strategies
 from alphasift.reflection import reflect_on_evaluation
+from alphasift.reflection.meta_learner import learn as meta_learn
 
 
 def main():
@@ -197,6 +198,11 @@ def main():
     rfp.add_argument("--model", default=None, help="LLM 模型（默认用 .env 中的配置）")
     rfp.add_argument("--min-confidence", type=float, default=0.5, help="应用修改的最低置信度 (0.0-1.0)")
 
+    # meta-learn — analyze evolution patterns
+    mlp = sub.add_parser("meta-learn", help="从历史进化记录中学习最优修改策略")
+    mlp.add_argument("--strategy", default=None, help="只分析特定策略")
+    mlp.add_argument("--json", action="store_true", help="以 JSON 输出")
+
     # quickstart
     qp = sub.add_parser(
         "quickstart",
@@ -363,12 +369,94 @@ def main():
             min_confidence=args.min_confidence,
         )
 
+    elif args.command == "meta-learn":
+        _run_meta_learn(
+            strategy=args.strategy,
+            as_json=args.json,
+        )
+
     elif args.command == "quickstart":
         _run_quickstart(strategy=args.strategy, max_output=args.max_output)
 
     else:
         parser.print_help()
         sys.exit(1)
+
+
+def _run_meta_learn(*, strategy: str | None = None, as_json: bool = False) -> None:
+    """Run meta-learning analysis."""
+    from alphasift.config import Config
+    from alphasift.reflection.meta_learner import learn, get_advice_for_strategy
+
+    config = Config.from_env()
+
+    if strategy:
+        # Get advice for a specific strategy
+        import yaml
+        category = "framework"
+        strat_path = config.strategies_dir / f"{strategy}.yaml"
+        if strat_path.exists():
+            try:
+                data = yaml.safe_load(strat_path.read_text(encoding="utf-8"))
+                category = data.get("category", "framework") if isinstance(data, dict) else "framework"
+            except Exception:
+                pass
+
+        advice = get_advice_for_strategy(
+            strategy_name=strategy,
+            data_dir=config.data_dir,
+            strategy_category=category,
+        )
+        if as_json:
+            import json
+            print(json.dumps(advice, ensure_ascii=False, indent=2))
+        else:
+            print(f"\n{'=' * 60}")
+            print(f"AlphaSift Meta-Learner · {strategy} ({category})")
+            print(f"{'=' * 60}\n")
+            if advice["recommended_change_types"]:
+                print(f"🎯 推荐修改类型: {', '.join(advice['recommended_change_types'][:3])}")
+            if "intensity_advice" in advice:
+                ia = advice["intensity_advice"]
+                print(f"📏 建议幅度: {ia['mult_range'][0]:.2f}× ~ {ia['mult_range'][1]:.2f}×")
+                print(f"🔢 每轮最多 {ia['max_changes']} 个修改")
+            print(f"📊 整体成功率: {advice['overall_success_rate']:.0%}")
+            if advice["warnings"]:
+                print("\n⚠️  警告:")
+                for w in advice["warnings"]:
+                    print(f"  - {w}")
+            print()
+    else:
+        # Full meta-learning report
+        result = meta_learn(data_dir=config.data_dir)
+        if as_json:
+            import json
+            from dataclasses import asdict
+            print(json.dumps(asdict(result), ensure_ascii=False, indent=2, default=str))
+        else:
+            print(f"\n{'=' * 60}")
+            print("AlphaSift Meta-Learner · 全局分析")
+            print(f"{'=' * 60}\n")
+            print(f"记录总数: {result.total_records} (覆盖 {result.total_strategies} 个策略)")
+            print(f"整体成功率: {result.overall_success_rate:.0%}")
+            print(f"预估收敛轮数: {result.estimated_convergence_rounds}")
+            print()
+            if result.change_stats:
+                print("--- 修改类型效果排名 ---")
+                for st in result.change_stats[:5]:
+                    bar = "█" * max(1, int(st.success_rate * 20))
+                    print(f"  {st.change_type:20s} {bar:20s} {st.success_rate:.0%} (n={st.count})")
+            print()
+            if result.category_best_types:
+                print("--- 各策略类型最佳修改 ---")
+                for cat, types in result.category_best_types.items():
+                    print(f"  {cat}: {', '.join(types[:2])}")
+            print()
+            if result.recommendations:
+                print("--- 建议 ---")
+                for r in result.recommendations:
+                    print(f"  • {r}")
+            print()
 
 
 def _run_reflect(
