@@ -56,9 +56,11 @@ def _fetch(code: str, period: str, count: int) -> dict:
         raise RuntimeError(f"baostock 登录失败: {lg.error_msg}")
 
     try:
+        # 基础字段（日周月都支持）
+        fields = "date,open,high,low,close,volume"
         rs = bs.query_history_k_data_plus(
             symbol,
-            "date,open,high,low,close,volume,code,name",
+            fields,
             start_date=start_d,
             end_date=end_d,
             frequency=freq,
@@ -71,24 +73,39 @@ def _fetch(code: str, period: str, count: int) -> dict:
         while rs.next():
             rows.append(rs.get_row_data())
 
+        # 获取股票名称（单独查一次日线的最新一条）
+        name = code
+        try:
+            rs_name = bs.query_history_k_data_plus(
+                symbol, "date,code,name",
+                start_date=date.today().strftime("%Y-%m-%d"),
+                end_date=date.today().strftime("%Y-%m-%d"),
+                frequency="d", adjustflag="2",
+            )
+            if rs_name.error_code == "0":
+                while rs_name.next():
+                    row_data = rs_name.get_row_data()
+                    if len(row_data) > 2 and row_data[2]:
+                        name = row_data[2]
+                        break
+        except Exception:
+            pass
+
         if not rows:
-            return {"code": code, "name": "", "period": period, "data": []}
+            return {"code": code, "name": name, "period": period, "data": []}
 
         rows = rows[-count:]
-
-        # 提取名称（取最后一条的名称字段，索引 6=code, 7=name）
-        name = rows[-1][7] if len(rows[-1]) > 7 and rows[-1][7] else code
 
         data = []
         for row in rows:
             try:
                 item = {
-                    "time": row[0],           # date
-                    "open": float(row[1]),    # open
-                    "high": float(row[2]),    # high
-                    "low": float(row[3]),     # low
-                    "close": float(row[4]),   # close
-                    "volume": int(float(row[5])),  # volume
+                    "time": row[0],
+                    "open": float(row[1]),
+                    "high": float(row[2]),
+                    "low": float(row[3]),
+                    "close": float(row[4]),
+                    "volume": int(float(row[5])),
                 }
                 data.append(item)
             except (ValueError, IndexError):
