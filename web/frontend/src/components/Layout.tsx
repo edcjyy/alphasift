@@ -6,6 +6,7 @@ import {
   Layers,
   Clock,
   Settings as SettingsIcon,
+  Activity,
   Brain,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
