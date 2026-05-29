@@ -319,9 +319,9 @@ async def health():
 
     # 检查数据源可用性
     try:
-        snapshot_sources = getattr(config, "snapshot_sources", None)
-        if snapshot_sources:
-            details["snapshot_sources"] = list(snapshot_sources)
+        sources = getattr(config, "snapshot_source_priority", None)
+        if sources:
+            details["snapshot_sources"] = list(sources)
         else:
             details["snapshot_sources"] = "未配置"
     except Exception as e:
@@ -333,7 +333,7 @@ async def health():
     details["llm_status"] = "已配置" if llm_model else "未配置"
 
     # DSA 连通性
-    dsa_url = getattr(config, "dsa_url", None) or getattr(config, "dsa_base_url", None)
+    dsa_url = getattr(config, "dsa_api_url", None) or ""
     details["dsa_url"] = dsa_url or "未配置"
 
     dsa_reachable = False
@@ -342,7 +342,7 @@ async def health():
             import httpx
 
             async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{dsa_url.rstrip('/')}/health")
+                resp = await client.get(f"{dsa_url.rstrip('/')}/api/health")
                 dsa_reachable = resp.status_code < 500
         except Exception:
             dsa_reachable = False
