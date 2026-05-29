@@ -31,6 +31,7 @@ RUN apt-get update && \
 # Python 源码（pip install 需要完整的包目录结构 + data-files）
 COPY pyproject.toml ./
 COPY README.md LICENSE SKILL.md .env.example ./
+COPY agents/ agents/
 COPY alphasift/ alphasift/
 COPY strategies/ strategies/
 COPY web/__init__.py web/
@@ -58,6 +59,6 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD curl -f http://localhost:8080/api/health || exit 1
+    CMD curl -f http://localhost:8080/api/v1/system/health || exit 1
 
 CMD ["uvicorn", "web.api.app:create_app", "--host", "0.0.0.0", "--port", "8080", "--factory"]
