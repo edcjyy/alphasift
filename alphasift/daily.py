@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
 import pandas as pd
@@ -43,11 +44,13 @@ def enrich_daily_features(
     lookback_days: int = 120,
     source: str = "akshare",
     fetch_retries: int = 2,
+    max_workers: int = 6,
 ) -> pd.DataFrame:
     """Attach daily technical features to the first ``max_rows`` candidates.
 
     This intentionally runs after broad snapshot filtering; it is not a full
-    market historical-data pass.
+    market historical-data pass.  Uses thread-pool concurrency to speed up
+    per-stock K-line fetching.
     """
     if df.empty or max_rows <= 0:
         return df.copy()
@@ -56,10 +59,12 @@ def enrich_daily_features(
     daily_errors: list[str] = []
     success_count = 0
     selected_index = list(result.index[:max_rows])
-    for idx in selected_index:
+
+    def _enrich_one(idx: int) -> tuple[int, dict, str | None]:
+        """Fetch and compute features for a single row. Returns (idx, features, error)."""
         raw_code = str(result.at[idx, "code"] if "code" in result.columns else "").strip()
         if not raw_code:
-            continue
+            return idx, dict(_DAILY_FEATURE_DEFAULTS), None
         code = raw_code.zfill(6)
         try:
             hist = fetch_daily_history(
@@ -69,12 +74,21 @@ def enrich_daily_features(
                 retries=fetch_retries,
             )
             features = compute_daily_features(hist)
-            success_count += 1
+            return idx, features, None
         except Exception as exc:
-            daily_errors.append(f"{code}: {exc}")
-            features = dict(_DAILY_FEATURE_DEFAULTS)
-        for key, value in features.items():
-            result.at[idx, key] = value
+            return idx, dict(_DAILY_FEATURE_DEFAULTS), f"{code}: {exc}"
+
+    workers = min(max_workers, len(selected_index))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_enrich_one, idx): idx for idx in selected_index}
+        for future in as_completed(futures):
+            idx, features, error = future.result()
+            if error:
+                daily_errors.append(error)
+            else:
+                success_count += 1
+            for key, value in features.items():
+                result.at[idx, key] = value
 
     result.attrs["daily_errors"] = daily_errors
     result.attrs["daily_success_count"] = success_count

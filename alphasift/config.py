@@ -123,7 +123,7 @@ class Config:
     llm_json_mode: bool = True
     llm_silent: bool = True
     llm_rank_weight: float = 0.40
-    llm_candidate_multiplier: int = 6
+    llm_candidate_multiplier: int = 4
     llm_max_candidates: int = 30
     llm_max_retries: int = 1
     llm_min_coverage: float = 0.60
@@ -162,7 +162,7 @@ class Config:
     post_analyzer_timeout_sec: float = 120.0
 
     # Optional daily K-line enrichment after snapshot hard filters.
-    daily_enrich_enabled: bool = False
+    daily_enrich_enabled: bool = True
     daily_enrich_max_candidates: int = 100
     daily_lookback_days: int = 120
     daily_source: str = "auto"
@@ -234,13 +234,16 @@ class Config:
             llm_json_mode=_parse_bool_env("LLM_JSON_MODE", True),
             llm_silent=_parse_bool_env("LLM_SILENT", True),
             llm_rank_weight=_parse_float_env("LLM_RANK_WEIGHT", 0.40),
-            llm_candidate_multiplier=max(1, int(os.getenv("LLM_CANDIDATE_MULTIPLIER", "6"))),
+            llm_candidate_multiplier=max(1, int(os.getenv("LLM_CANDIDATE_MULTIPLIER", "4"))),
             llm_max_candidates=max(1, int(os.getenv("LLM_MAX_CANDIDATES", "30"))),
             llm_max_retries=max(0, int(os.getenv("LLM_MAX_RETRIES", "1"))),
             llm_min_coverage=_parse_float_env("LLM_MIN_COVERAGE", 0.60),
             llm_context_max_chars=max(500, int(os.getenv("LLM_CONTEXT_MAX_CHARS", "4000"))),
             snapshot_source_priority=_resolve_snapshot_source_priority(),
-            tushare_api_url=os.getenv("TUSHARE_API_URL", "").strip(),
+            tushare_api_url=(
+                os.getenv("TUSHARE_API_URL", "").strip()
+                or os.getenv("TUSHARE_PROXY_URL", "").strip()
+            ),
             strategies_dir=_default_strategies_dir(),
             industry_map_files=[
                 Path(item)
@@ -261,7 +264,7 @@ class Config:
             ),
             post_analyzer_url=os.getenv("POST_ANALYZER_URL", ""),
             post_analyzer_timeout_sec=float(os.getenv("POST_ANALYZER_TIMEOUT_SEC", "120")),
-            daily_enrich_enabled=_parse_bool_env("DAILY_ENRICH_ENABLED", False),
+            daily_enrich_enabled=_parse_bool_env("DAILY_ENRICH_ENABLED", True),
             daily_enrich_max_candidates=max(1, int(os.getenv("DAILY_ENRICH_MAX_CANDIDATES", "100"))),
             daily_lookback_days=max(30, int(os.getenv("DAILY_LOOKBACK_DAYS", "120"))),
             daily_source=os.getenv("DAILY_SOURCE", "auto"),

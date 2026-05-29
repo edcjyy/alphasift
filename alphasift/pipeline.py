@@ -241,14 +241,22 @@ def screen(
             f"Market state: regime={market_state.regime} "
             + " | ".join(market_state.notes)
         )
-        # Extract base weights from screening config
+        # Extract base weights from screening config (9-factor formula, synced with scorer.py)
         from alphasift.scorer import _FACTOR_COLUMNS as _cols
+        tw = screening.tech_weight
         base_weights = screening.factor_weights or {
-            "value": (1 - screening.tech_weight) * 0.50,
-            "liquidity": (1 - screening.tech_weight) * 0.25,
-            "stability": (1 - screening.tech_weight) * 0.25,
-            "momentum": screening.tech_weight * 0.55,
-            "activity": screening.tech_weight * 0.45,
+            # Fundamental cluster (weight = 1 - tech_weight)
+            "value": (1 - tw) * 0.35,
+            "liquidity": (1 - tw) * 0.15,
+            "stability": (1 - tw) * 0.15,
+            "quality": (1 - tw) * 0.15,
+            "size": (1 - tw) * 0.10,
+            # Technical cluster (weight = tech_weight)
+            "momentum": tw * 0.40,
+            "activity": tw * 0.35,
+            # Cross-cluster factors (split between clusters)
+            "reversal": 0.04,
+            "theme_heat": 0.06,
         }
         base_weights = {
             k: max(float(v), 0.0) for k, v in base_weights.items() if k in _cols

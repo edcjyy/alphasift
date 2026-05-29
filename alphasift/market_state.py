@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class MarketState:
     """Snapshot of current market environment."""
 
-    regime: str = "neutral"  # bullish / bearish / neutral / volatile
+    regime: str = "neutral"  # bullish / bearish / neutral / volatile / polarized
     breadth_ratio: float = 0.0  # advancers / decliners
     index_vs_ma20_pct: float = 0.0  # HS300 close vs 20-day MA
     volume_deviation_pct: float = 0.0  # turnover vs 20-day average
@@ -154,9 +154,11 @@ def _classify_regime(state: MarketState) -> None:
         # Bullish: favor momentum and activity, reduce value weighting
         adjustments["momentum_weight_mult"] = 1.25
         adjustments["activity_weight_mult"] = 1.20
+        adjustments["theme_heat_weight_mult"] = 1.15
+        adjustments["reversal_weight_mult"] = 0.85
         adjustments["value_weight_mult"] = 0.80
         adjustments["stability_weight_mult"] = 0.85
-        state.notes.append("Bullish regime: favoring momentum/activity")
+        state.notes.append("Bullish regime: favoring momentum/activity/theme_heat")
     elif below_ma20 and breadth_weak:
         state.regime = "bearish"
         # Bearish: favor value and stability, reduce momentum
@@ -165,7 +167,9 @@ def _classify_regime(state: MarketState) -> None:
         adjustments["value_weight_mult"] = 1.40
         adjustments["stability_weight_mult"] = 1.30
         adjustments["quality_weight_mult"] = 1.15
-        state.notes.append("Bearish regime: favoring value/stability/quality")
+        adjustments["reversal_weight_mult"] = 1.10
+        adjustments["theme_heat_weight_mult"] = 0.70
+        state.notes.append("Bearish regime: favoring value/stability/quality/reversal")
     elif volume_spike and (not above_ma20):
         state.regime = "volatile"
         # Volatile: tighten risk, favor stability
@@ -173,6 +177,21 @@ def _classify_regime(state: MarketState) -> None:
         adjustments["momentum_weight_mult"] = 0.70
         adjustments["activity_weight_mult"] = 0.60
         state.notes.append("Volatile regime: favoring stability, reducing speculation")
+    elif (
+        not above_ma20
+        and not below_ma20
+        and state.breadth_ratio < 0.50
+    ):
+        # Polarized: index flat but breadth very weak → extreme divergence
+        # Favor theme_heat to capture concentrated leadership, boost quality
+        state.regime = "polarized"
+        adjustments["theme_heat_weight_mult"] = 1.80
+        adjustments["quality_weight_mult"] = 1.30
+        adjustments["size_weight_mult"] = 1.25
+        adjustments["momentum_weight_mult"] = 0.70
+        adjustments["activity_weight_mult"] = 0.65
+        adjustments["reversal_weight_mult"] = 0.80
+        state.notes.append("Polarized regime: extreme divergence, favoring theme_heat/quality/size")
     else:
         state.regime = "neutral"
         state.notes.append("Neutral regime: no weight adjustment")
@@ -238,8 +257,11 @@ def apply_market_state_weights(
     for factor, mult_key in [
         ("value", "value_weight_mult"),
         ("momentum", "momentum_weight_mult"),
+        ("reversal", "reversal_weight_mult"),
         ("activity", "activity_weight_mult"),
         ("stability", "stability_weight_mult"),
+        ("size", "size_weight_mult"),
+        ("theme_heat", "theme_heat_weight_mult"),
         ("quality", "quality_weight_mult"),
     ]:
         mult = state.weight_adjustments.get(mult_key, 1.0)
