@@ -35,7 +35,7 @@ COPY strategies/ strategies/
 COPY web/__init__.py web/
 COPY web/api/ web/api/
 COPY web/logging_config.py web/
-RUN pip install --no-cache-dir ".[web]"
+RUN pip install --no-cache-dir --no-build-isolation -v ".[web]"
 
 # 前端构建产物（来自 Stage 1）
 COPY --from=frontend-builder /app/web/frontend/dist web/static/
