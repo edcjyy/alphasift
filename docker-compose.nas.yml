@@ -20,7 +20,7 @@ services:
     volumes:
       - alphasift-data:/app/data
       - alphasift-logs:/app/logs
-      - ./.env:/app/.env:ro
+      - ./.env:/app/.env
       # 自定义策略目录挂载（NAS 上放 yaml 文件即可自动加载）
       # 如果不需要自定义策略，注释掉下面两行即可（容器内使用内置策略）
       - alphasift-strategies:/app/strategies
