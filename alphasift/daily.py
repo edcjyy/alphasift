@@ -79,16 +79,27 @@ def enrich_daily_features(
             return idx, dict(_DAILY_FEATURE_DEFAULTS), f"{code}: {exc}"
 
     workers = min(max_workers, len(selected_index))
+    total = len(selected_index)
+    log_interval = max(total // 5, 1)  # Log at ~20%, 40%, 60%, 80%, 100%
+    completed_count = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(_enrich_one, idx): idx for idx in selected_index}
         for future in as_completed(futures):
             idx, features, error = future.result()
+            completed_count += 1
             if error:
                 daily_errors.append(error)
             else:
                 success_count += 1
             for key, value in features.items():
                 result.at[idx, key] = value
+            if completed_count % log_interval == 0 or completed_count == total:
+                code = str(result.at[idx, "code"] if "code" in result.columns else "")
+                logger.info(
+                    "daily_enrich progress: %d/%d (%.0f%%) ok=%d err=%d last=%s",
+                    completed_count, total, completed_count / total * 100,
+                    success_count, len(daily_errors), code,
+                )
 
     result.attrs["daily_errors"] = daily_errors
     result.attrs["daily_success_count"] = success_count

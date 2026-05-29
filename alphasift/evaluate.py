@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -295,7 +295,7 @@ def evaluate_saved_runs(
         "by_path_status": _aggregate_by_pick_label(evaluations, "path_status"),
     }
     return {
-        "evaluated_at": datetime.now().isoformat(),
+        "evaluated_at": datetime.now(timezone(timedelta(hours=8))).isoformat(),
         "snapshot_source": str(current_snapshot.attrs.get("snapshot_source", "")),
         "source_errors": [str(item) for item in current_snapshot.attrs.get("source_errors", [])],
         "limit": limit,
@@ -690,7 +690,8 @@ def _elapsed_days(run: ScreenResult) -> int | None:
         created = datetime.fromisoformat(run.created_at)
     except ValueError:
         return None
-    return (datetime.now() - created).days
+    now = datetime.now(tz=created.tzinfo) if created.tzinfo else datetime.now()
+    return (now - created).days
 
 
 def _safe_round(value: float | None) -> float | None:

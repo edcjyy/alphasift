@@ -492,6 +492,7 @@ def _df_to_picks(df: pd.DataFrame) -> list[Pick]:
             price_above_ma20=_safe_bool(row.get("price_above_ma20")),
             macd_status=str(row.get("macd_status", "") or ""),
             rsi_status=str(row.get("rsi_status", "") or ""),
+            rsi14=_safe_float(row.get("rsi14")),
             breakout_20d_pct=_safe_float(row.get("breakout_20d_pct")),
             range_20d_pct=_safe_float(row.get("range_20d_pct")),
             volume_ratio_20d=_safe_float(row.get("volume_ratio_20d")),

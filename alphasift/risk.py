@@ -27,7 +27,9 @@ _DEFAULT_RISK_PROFILE = {
     "llm_risk_points_cap": 4.0,
     "deep_risk_points": 1.5,
     "deep_risk_points_cap": 4.5,
+    "deep_bear_trend_points": 3.0,
 }
+
 _DEFAULT_PORTFOLIO_BUCKETS = {
     "金融": ("券商", "银行", "保险", "金融"),
     "地产链": ("地产", "房地产", "建材", "家居", "物业"),
@@ -78,7 +80,7 @@ def apply_risk_overlay(
 def apply_portfolio_overlay(
     picks: list[Pick],
     *,
-    max_same_sector: int = 2,
+    max_same_sector: int = 1,
     concentration_penalty: float = 4.0,
     profile: dict[str, object] | None = None,
 ) -> tuple[list[Pick], list[str]]:
@@ -93,7 +95,14 @@ def apply_portfolio_overlay(
         return picks, []
 
     ordered = sorted(picks, key=lambda item: item.final_score, reverse=True)
-    if not any(_canonical_sector(_pick_sector(pick)) for pick in ordered):
+    has_any_sector = any(_canonical_sector(_pick_sector(pick)) for pick in ordered)
+    if not has_any_sector:
+        # Also try industry field directly (em_datacenter uses INDUSTRY)
+        has_any_sector = any(
+            _canonical_sector(str(pick.industry or "")) or _canonical_sector(str(pick.concepts or "")[:30])
+            for pick in ordered
+        )
+    if not has_any_sector:
         return ordered, []
 
     bucket_counts: dict[str, int] = {}
@@ -184,6 +193,20 @@ def assess_pick_risk(
         )
         flags.extend(pick.deep_analysis_risk_flags)
 
+    # Deep bearish trend detection: MACD bearish + RSI oversold + price below MA20
+    deep_bear_signals = 0
+    if pick.macd_status == "bearish":
+        deep_bear_signals += 1
+    if pick.rsi_status == "oversold" or (pick.rsi14 is not None and pick.rsi14 < 40.0):
+        deep_bear_signals += 1
+    if not pick.price_above_ma20:
+        deep_bear_signals += 1
+    if pick.change_60d is not None and pick.change_60d < -20:
+        deep_bear_signals += 1
+    if deep_bear_signals >= 3:
+        points += profile.get("deep_bear_trend_points", 3.0)
+        flags.append("deep_bear_trend")
+
     return points, _unique(flags)
 
 
@@ -219,7 +242,12 @@ def _canonical_sector(label: str) -> str:
 
 
 def _pick_sector(pick: Pick) -> str:
-    return pick.llm_sector or pick.industry
+    """Get the most specific sector label from pick metadata."""
+    return (
+        pick.llm_sector
+        or str(pick.industry or "").strip()
+        or str(pick.concepts or "").split(",")[0].strip()[:30]
+    )
 
 
 def _risk_profile(profile: dict[str, object] | None) -> dict[str, float]:

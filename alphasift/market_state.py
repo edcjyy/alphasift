@@ -86,6 +86,9 @@ def assess_market_state(
     # 4. Determine regime and weight adjustments
     _classify_regime(state)
 
+    # 5. Market style detection: growth vs value relative strength
+    _detect_market_style(state, snapshot_df=snapshot_df)
+
     if state.notes:
         logger.info("Market state: regime=%s %s", state.regime, " | ".join(state.notes))
 
@@ -197,6 +200,51 @@ def _classify_regime(state: MarketState) -> None:
         state.notes.append("Neutral regime: no weight adjustment")
 
     state.weight_adjustments = adjustments
+
+
+def _detect_market_style(state: MarketState, *, snapshot_df: pd.DataFrame | None = None) -> None:
+    """Detect growth vs value market style via index relative strength.
+
+    Compares 20D performance of 创业板指 (growth proxy) vs 上证指数 (value proxy).
+    When growth significantly outperforms, boosts momentum/theme_heat and reduces
+    value weighting even in neutral regime.
+    """
+    try:
+        gemb_hist = _fetch_index_history("399006.SZ", source="auto")  # 创业板指
+        sz_hist = _fetch_index_history("000001.SH", source="auto")     # 上证指数
+        if gemb_hist is None or gemb_hist.empty or sz_hist is None or sz_hist.empty:
+            return
+
+        gemb_close = pd.to_numeric(gemb_hist["close"], errors="coerce").dropna()
+        sz_close = pd.to_numeric(sz_hist["close"], errors="coerce").dropna()
+        if len(gemb_close) < 21 or len(sz_close) < 21:
+            return
+
+        gemb_20d = (float(gemb_close.iloc[-1]) / float(gemb_close.iloc[-21]) - 1.0) * 100
+        sz_20d = (float(sz_close.iloc[-1]) / float(sz_close.iloc[-21]) - 1.0) * 100
+        style_spread = round(gemb_20d - sz_20d, 2)
+
+        state.notes.append(f"style_spread={style_spread:.1f}% (GEM={gemb_20d:.1f}% vs SH={sz_20d:.1f}%)")
+
+        # If growth outperforms by >15% in 20D, adjust weights
+        if style_spread > 15.0:
+            existing = state.weight_adjustments
+            existing["momentum_weight_mult"] = existing.get("momentum_weight_mult", 1.0) * 1.20
+            existing["theme_heat_weight_mult"] = existing.get("theme_heat_weight_mult", 1.0) * 1.15
+            existing["size_weight_mult"] = existing.get("size_weight_mult", 1.0) * 1.10
+            existing["value_weight_mult"] = existing.get("value_weight_mult", 1.0) * 0.85
+            existing["stability_weight_mult"] = existing.get("stability_weight_mult", 1.0) * 0.90
+            state.notes.append(f"Growth-dominant style (spread>{style_spread:.0f}%): boosting momentum/theme_heat/size, reducing value/stability")
+        elif style_spread < -15.0:
+            # Value outperforms
+            existing = state.weight_adjustments
+            existing["value_weight_mult"] = existing.get("value_weight_mult", 1.0) * 1.20
+            existing["stability_weight_mult"] = existing.get("stability_weight_mult", 1.0) * 1.15
+            existing["quality_weight_mult"] = existing.get("quality_weight_mult", 1.0) * 1.10
+            existing["momentum_weight_mult"] = existing.get("momentum_weight_mult", 1.0) * 0.85
+            state.notes.append(f"Value-dominant style (spread<{style_spread:.0f}%): boosting value/stability/quality, reducing momentum")
+    except Exception as exc:
+        logger.debug("Market style detection failed: %s", exc)
 
 
 def _fetch_index_history(code: str, *, source: str = "auto") -> pd.DataFrame | None:

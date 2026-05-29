@@ -3,7 +3,15 @@
 
 from typing import Any
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+
+# Ensure all timestamps use Asia/Shanghai (UTC+8)
+_TZ_SHANGHAI = timezone(timedelta(hours=8))
+
+
+def _now_shanghai() -> str:
+    return datetime.now(_TZ_SHANGHAI).isoformat()
 
 
 @dataclass
@@ -136,6 +144,7 @@ class Pick:
     price_above_ma20: bool | None = None
     macd_status: str = ""
     rsi_status: str = ""
+    rsi14: float | None = None
     breakout_20d_pct: float | None = None
     range_20d_pct: float | None = None
     volume_ratio_20d: float | None = None
@@ -204,7 +213,7 @@ class ScreenResult:
     portfolio_diversity_enabled: bool = True
     portfolio_concentration_notes: list[str] = field(default_factory=list)
     saved_path: str = ""
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    created_at: str = field(default_factory=_now_shanghai)
 
 
 @dataclass
@@ -238,7 +247,7 @@ class EvaluationResult:
     strategy: str
     market: str
     created_at: str
-    evaluated_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    evaluated_at: str = field(default_factory=_now_shanghai)
     elapsed_days: int | None = None
     snapshot_source: str = ""
     source_errors: list[str] = field(default_factory=list)

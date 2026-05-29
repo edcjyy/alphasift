@@ -7,11 +7,16 @@ This is separate from single-stock realtime quotes.
 
 import logging
 import os
+import time
 from datetime import date, datetime, timedelta
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+# Data source cooldown: skip recently failed sources to avoid wasted time
+_SOURCE_COOLDOWN: dict[str, float] = {}  # source_name -> timestamp of last failure
+_SOURCE_COOLDOWN_DURATION = 3600  # 1 hour cooldown for failed sources
 
 
 def fetch_cn_snapshot(source: str = "efinance") -> pd.DataFrame:
@@ -43,6 +48,13 @@ def fetch_snapshot_with_fallback(
     """Try sources in order, return first source matching required schema."""
     errors = []
     for source in sources:
+        # Check cooldown: skip sources that failed recently
+        fail_time = _SOURCE_COOLDOWN.get(source)
+        if fail_time and (time.time() - fail_time) < _SOURCE_COOLDOWN_DURATION:
+            errors.append(f"{source}: skipped (cooldown, failed {int(time.time() - fail_time)}s ago)")
+            logger.info("Snapshot source %s skipped: in cooldown (%.0fs remaining)",
+                       source, _SOURCE_COOLDOWN_DURATION - (time.time() - fail_time))
+            continue
         try:
             df = fetch_cn_snapshot(source)
             if not df.empty:
@@ -54,11 +66,15 @@ def fetch_snapshot_with_fallback(
                     continue
                 df.attrs["source_errors"] = list(errors)
                 logger.info("Snapshot fetched from %s: %d rows", source, len(df))
+                # Clear cooldown on success
+                _SOURCE_COOLDOWN.pop(source, None)
                 return df
             errors.append(f"{source}: returned empty data")
         except Exception as e:
             errors.append(f"{source}: {e}")
             logger.warning("Snapshot source %s failed: %s", source, e)
+            # Record failure time for cooldown
+            _SOURCE_COOLDOWN[source] = time.time()
     raise RuntimeError(f"All snapshot sources failed: {'; '.join(errors)}")
 
 
@@ -113,7 +129,8 @@ def _fetch_em_datacenter() -> pd.DataFrame:
             "p": str(page),
             "sty": "SECUCODE,SECURITY_CODE,SECURITY_NAME_ABBR,NEW_PRICE,"
                    "CHANGE_RATE,VOLUME_RATIO,DEAL_AMOUNT,TURNOVERRATE,"
-                   "PE9,PBNEWMRQ,TOTAL_MARKET_CAP,CIRCULATION_MARKET_CAP",
+                   "PE9,PBNEWMRQ,TOTAL_MARKET_CAP,CIRCULATION_MARKET_CAP,"
+                   "INDUSTRY",
             "filter": '(MARKET+in+("上交所主板","深交所主板","深交所创业板","上交所科创板","北交所"))',
             "source": "SELECT_SECURITIES",
             "client": "WEB",
