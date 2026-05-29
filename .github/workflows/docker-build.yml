@@ -2,7 +2,7 @@ name: Docker Build & Publish
 
 on:
   push:
-    branches: [main, main2]
+    branches: [main2]
     tags:
       - 'v*.*.*'
     paths-ignore:
