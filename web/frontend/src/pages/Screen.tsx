@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Loader2, AlertCircle } from 'lucide-react';
-import { useScreenStore } from '@/stores/screenStore';
+import { Play, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useScreenStore, getStageLabel } from '@/stores/screenStore';
 import { apiGet } from '@/api';
 import type { StrategySummary } from '@/types';
 import PickTable from '@/components/PickTable';
@@ -144,6 +144,33 @@ export default function Screen() {
           </div>
         )}
       </div>
+
+      {/* 选股进度 */}
+      {isScreening && (
+        <div className="bg-surface rounded-xl border border-border p-5 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Loader2 className="w-4 h-4 animate-spin text-accent" />
+            选股进行中...
+          </div>
+          <div className="bg-gray-900 rounded-full h-2.5 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-accent to-purple-500 rounded-full transition-all duration-700"
+              style={{ width: '60%' }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-gray-500">
+            <span>加载策略</span>
+            <span>获取行情</span>
+            <span>筛选评分</span>
+            <span>LLM排序</span>
+            <span>完成</span>
+          </div>
+          <p className="text-sm text-gray-400 flex items-center gap-2">
+            <span className="inline-block w-1.5 h-1.5 bg-accent rounded-full animate-pulse" />
+            正在处理中，请耐心等待...（通常需要 30-120 秒）
+          </p>
+        </div>
+      )}
 
       {/* 结果 */}
       {currentResult && (

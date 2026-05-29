@@ -33,6 +33,7 @@ class ScreenResponse(BaseModel):
     """选股结果（JSON 兜底序列化）。"""
     run_id: str | None = Field(default=None, description="保存后的运行 ID")
     result: dict = Field(..., description="ScreenResult 的字典序列化结果")
+    task_id: str | None = Field(default=None, description="任务ID，用于轮询进度")
 
 
 # ==============================================================================
