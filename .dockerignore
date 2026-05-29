@@ -26,10 +26,11 @@ web/frontend/.vite
 *.swp
 *.swo
 
-# Docs (but SKILL.md is required by pyproject.toml data-files)
+# Docs (SKILL.md/README.md 是 pyproject.toml data-files 的必需文件)
 docs
 *.md
 !SKILL.md
+!README.md
 !.env.example
 !LICENSE
 
