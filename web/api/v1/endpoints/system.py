@@ -97,9 +97,7 @@ ENV_WHITELIST = {
 
 # Keys that contain secrets — mask on read, never echo back full value
 ENV_SENSITIVE_KEYS = {
-    "LLM_API_KEY",        # API key
-    "TUSHARE_API_URL",    # may contain token in query string
-    "TUSHARE_TOKEN",      # Tushare Pro token
+    "TUSHARE_TOKEN",      # Tushare Pro token — 始终脱敏
     "TUSHARE_API_TOKEN",  # alias
 }
 

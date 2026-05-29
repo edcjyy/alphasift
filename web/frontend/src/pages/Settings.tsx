@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { apiGet, fetchEnv, updateEnv } from '@/api';
 import type { HealthResponse, EnvEntry, EnvUpdateResponse } from '@/types';
+import LLMChannelEditor from '@/components/settings/LLMChannelEditor';
 
 // 环境变量分组配置
 const ENV_GROUPS: {
@@ -24,36 +25,10 @@ const ENV_GROUPS: {
   description: string;
 }[] = [
   {
-    label: 'LLM 大语言模型',
+    label: 'LLM 渠道配置',
     icon: <Brain className="w-4 h-4" />,
-    keys: [
-      'LITELLM_MODEL',
-      'LITELLM_FALLBACK_MODELS',
-      'LLM_CHANNELS',
-      'LITELLM_CONFIG',
-      'LLM_MODEL',
-      'LLM_BASE_URL',
-      'LLM_API_KEY',
-      'LLM_TEMPERATURE',
-      'LLM_CONTEXT',
-      'LLM_JSON_MODE',
-      'LLM_SILENT',
-      'LLM_RANK_WEIGHT',
-      'OPENAI_BASE_URL',
-      'LLM_CANDIDATE_MULTIPLIER',
-      'LLM_MAX_CANDIDATES',
-      'LLM_MAX_RETRIES',
-      'LLM_MIN_COVERAGE',
-      'LLM_CONTEXT_MAX_CHARS',
-      'LLM_CANDIDATE_CONTEXT_ENABLED',
-      'LLM_CANDIDATE_CONTEXT_MAX_CANDIDATES',
-      'LLM_CANDIDATE_CONTEXT_PROVIDERS',
-      'LLM_CANDIDATE_CONTEXT_NEWS_LIMIT',
-      'LLM_CANDIDATE_CONTEXT_ANNOUNCEMENT_LIMIT',
-      'LLM_CANDIDATE_CONTEXT_CACHE_ENABLED',
-      'LLM_CANDIDATE_CONTEXT_CACHE_TTL_HOURS',
-    ],
-    description: 'LiteLLM 主模型、渠道、API Key、候选上下文等',
+    keys: [],  // 由 LLMChannelEditor 组件独立渲染
+    description: '按渠道（Channel）管理模型接入地址、API Key 和模型列表',
   },
   {
     label: '数据源',
@@ -441,15 +416,38 @@ export default function Settings() {
             ))}
           </div>
 
-          {/* 当前分组表单 */}
-          <div className="bg-surface rounded-xl border border-border p-5">
-            <h3 className="font-medium mb-1 flex items-center gap-2">
-              {ENV_GROUPS[activeGroup]?.icon}
-              {ENV_GROUPS[activeGroup]?.label ?? '未知分组'}
-            </h3>
-            <p className="text-xs text-gray-500 mb-4">{ENV_GROUPS[activeGroup]?.description ?? ''}</p>
-            {(ENV_GROUPS[activeGroup]?.keys ?? []).map(renderField)}
-          </div>
+          {/* 当前分组表单 — LLM 渠道使用专用编辑器 */}
+          {activeGroup === 0 ? (
+            <div className="bg-surface rounded-xl border border-border p-5">
+              <h3 className="font-medium mb-1 flex items-center gap-2">
+                <Brain className="w-4 h-4" />
+                LLM 渠道配置
+              </h3>
+              <p className="text-xs text-gray-500 mb-4">
+                按渠道管理 LLM 提供商，每个渠道可独立配置 Base URL、API Key 和模型列表
+              </p>
+              <LLMChannelEditor
+                envEntries={envEntries}
+                onSaved={() => {
+                  fetchEnv().then((refreshed) => {
+                    setEnvEntries(refreshed);
+                    const draft: Record<string, string> = {};
+                    for (const e of refreshed) draft[e.key] = formatEnvValue(e);
+                    setEnvDraft(draft);
+                  });
+                }}
+              />
+            </div>
+          ) : (
+            <div className="bg-surface rounded-xl border border-border p-5">
+              <h3 className="font-medium mb-1 flex items-center gap-2">
+                {ENV_GROUPS[activeGroup]?.icon}
+                {ENV_GROUPS[activeGroup]?.label ?? '未知分组'}
+              </h3>
+              <p className="text-xs text-gray-500 mb-4">{ENV_GROUPS[activeGroup]?.description ?? ''}</p>
+              {(ENV_GROUPS[activeGroup]?.keys ?? []).map(renderField)}
+            </div>
+          )}
 
           {/* 保存按钮 + 结果提示 */}
           <div className="flex items-center gap-4">
