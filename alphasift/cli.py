@@ -24,6 +24,7 @@ from alphasift.store import (
     screen_result_to_jsonl,
 )
 from alphasift.strategy import list_strategies
+from alphasift.reflection import reflect_on_evaluation
 
 
 def main():
@@ -185,6 +186,17 @@ def main():
     ap = sub.add_parser("audit", help="评估项目能力、策略配置覆盖和已知短板")
     ap.add_argument("--json", action="store_true", help="以 JSON 输出")
 
+    # reflect — Reflection Layer: LLM analysis of evaluation results
+    rfp = sub.add_parser(
+        "reflect",
+        help="LLM 反思评估结果并提出策略参数修改建议",
+    )
+    rfp.add_argument("run", help="已评估的 run_id")
+    rfp.add_argument("--apply", action="store_true", help="自动应用 LLM 建议的修改到策略 YAML")
+    rfp.add_argument("--dry-run", action="store_true", help="预览修改而不实际写入文件")
+    rfp.add_argument("--model", default=None, help="LLM 模型（默认用 .env 中的配置）")
+    rfp.add_argument("--min-confidence", type=float, default=0.5, help="应用修改的最低置信度 (0.0-1.0)")
+
     # quickstart
     qp = sub.add_parser(
         "quickstart",
@@ -342,12 +354,82 @@ def main():
         else:
             print(_format_audit_explain(result))
 
+    elif args.command == "reflect":
+        _run_reflect(
+            run_id=args.run,
+            apply=args.apply,
+            dry_run=args.dry_run,
+            model=args.model,
+            min_confidence=args.min_confidence,
+        )
+
     elif args.command == "quickstart":
         _run_quickstart(strategy=args.strategy, max_output=args.max_output)
 
     else:
         parser.print_help()
         sys.exit(1)
+
+
+def _run_reflect(
+    *,
+    run_id: str,
+    apply: bool = False,
+    dry_run: bool = False,
+    model: str | None = None,
+    min_confidence: float = 0.5,
+) -> None:
+    """Run Reflection Layer analysis on a saved evaluation."""
+    from alphasift.reflection import reflect_on_evaluation
+
+    if apply and dry_run:
+        print("错误: --apply 和 --dry-run 不能同时使用")
+        sys.exit(1)
+
+    mode = "preview" if dry_run else ("apply" if apply else "analyze")
+    print(f"\n{'=' * 60}")
+    print(f"AlphaSift Reflection · {mode} mode")
+    print(f"Run ID: {run_id}")
+    print(f"{'=' * 60}\n")
+
+    result = reflect_on_evaluation(
+        run_id=run_id,
+        model=model,
+        apply=apply,
+        dry_run=dry_run,
+        min_confidence=min_confidence,
+    )
+
+    print(f"策略: {result.strategy}")
+    print(f"胜率: {(result.win_rate or 0) * 100:.1f}%")
+    print(f"平均收益: {result.avg_return_pct or 0:+.2f}%")
+    print(f"选股数: {result.pick_count} (盈 {result.win_count} / 亏 {result.loss_count})")
+    print(f"模型: {result.model_used or '默认'}")
+    print()
+
+    if result.summary:
+        print(f"📊 诊断: {result.summary}")
+    print()
+
+    if result.diagnosis:
+        print("--- 详细分析 ---")
+        print(result.diagnosis)
+        print()
+
+    if result.changes:
+        print(f"--- 建议修改 ({len(result.changes)} 个) ---")
+        for i, c in enumerate(result.changes, 1):
+            print(f"  {i}. [{c.change_type}] {c.target}")
+            print(f"      {c.old_value} → {c.new_value}")
+            print(f"      理由: {c.reason}  (置信度: {c.confidence:.2f})")
+        print()
+
+    if apply:
+        print("✅ 修改已应用到策略文件（已自动备份为 .yaml.bak）")
+    elif dry_run:
+        print("🔍 以上为 dry-run 预览，未实际修改文件")
+    else:
+        print("💡 使用 --apply 自动应用建议的修改，或 --dry-run 预览效果")
 
 
 def _run_quickstart(*, strategy: str = "dual_low", max_output: int = 5) -> None:

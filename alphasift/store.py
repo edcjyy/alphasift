@@ -69,6 +69,19 @@ def save_evaluation_result(
     return output_path
 
 
+def load_evaluation_result(run_ref: str | Path, *, data_dir: Path) -> EvaluationResult:
+    """Load a saved evaluation result by run_id or path."""
+    path = Path(run_ref)
+    if not path.is_file():
+        candidate = data_dir / "evaluations" / f"{run_ref}.json"
+        if candidate.is_file():
+            path = candidate
+        else:
+            raise FileNotFoundError(f"Saved evaluation not found: {run_ref}")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return evaluation_from_dict(data)
+
+
 def list_saved_runs(*, data_dir: Path, limit: int = 20) -> list[dict[str, object]]:
     runs_dir = data_dir / "runs"
     if not runs_dir.is_dir():
