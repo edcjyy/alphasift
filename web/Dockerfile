@@ -28,16 +28,14 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Python 源码（先复制源码再安装，pip install "." 需要完整包内容）
+# Python 源码（pip install 需要完整的包目录结构）
 COPY pyproject.toml ./
 COPY alphasift/ alphasift/
 COPY strategies/ strategies/
-RUN pip install --no-cache-dir ".[web]"
-
-# Web 层（__init__.py + API + logging_config）
 COPY web/__init__.py web/
 COPY web/api/ web/api/
 COPY web/logging_config.py web/
+RUN pip install --no-cache-dir ".[web]"
 
 # 前端构建产物（来自 Stage 1）
 COPY --from=frontend-builder /app/web/frontend/dist web/static/
