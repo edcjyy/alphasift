@@ -51,11 +51,11 @@ export interface RunSummary {
 
 export interface StrategySummary {
   name: string;
-  display_name: string;
-  description: string;
-  version: string;
-  category: string;
-  tags: string[];
+  display_name?: string;
+  description?: string;
+  version?: string;
+  category?: string;
+  tags?: string[];
 }
 
 export interface EvaluateResult {

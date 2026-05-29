@@ -2,6 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
+import 'dotenv/config';  // 让 Vite 读取 .env 文件
+
+// 后端地址，优先级：环境变量 > 默认值
+const apiTarget = process.env.VITE_API_TARGET ?? 'http://127.0.0.1:8080';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -12,10 +16,10 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    port: Number(process.env.VITE_DEV_PORT) || 5173,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8080',
+        target: apiTarget,
         changeOrigin: true,
       },
     },

@@ -38,7 +38,8 @@ alphasift = "alphasift.cli:main"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["alphasift*"]
+include = ["alphasift*", "web"]
+exclude = ["web.frontend*", "web.static*"]
 
 [tool.setuptools.package-data]
 alphasift = ["strategies/*.yaml"]
