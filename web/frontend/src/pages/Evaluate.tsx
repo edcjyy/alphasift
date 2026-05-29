@@ -24,7 +24,7 @@ export default function Evaluate() {
     // 后端返回 { run_id: string; result: EvaluateResult }
     apiPost<{ run_id: string; result: any }>(`/api/v1/evaluate/${runId}`, {
       with_price_path: true,
-    })
+    }, { timeout: 300000 })
       .then((data) => {
         setResult(data.result as EvaluateResult);
       })

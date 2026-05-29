@@ -102,7 +102,7 @@ export default function Schedule() {
   const handleRun = async (id: string) => {
     setRunning((s) => new Set(s).add(id));
     try {
-      await apiPost(`/api/v1/schedule/${id}/run`);
+      await apiPost(`/api/v1/schedule/${id}/run`, {}, { timeout: 600000 });
     } catch {
       // ignore
     }

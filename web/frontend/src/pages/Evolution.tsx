@@ -147,7 +147,7 @@ function ReflectTab({ runs }: { runs: RunSummary[] }) {
         apply: false,
         dry_run: false,
         min_confidence: minConfidence,
-      });
+      }, { timeout: 300000 });
       setResult(res);
     } catch (e: any) {
       setError(e?.response?.data?.detail ?? '分析失败');
@@ -166,7 +166,7 @@ function ReflectTab({ runs }: { runs: RunSummary[] }) {
         apply: true,
         dry_run: false,
         min_confidence: minConfidence,
-      });
+      }, { timeout: 300000 });
       setResult(res);
       setError('');
     } catch (e: any) {

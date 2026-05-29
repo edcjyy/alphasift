@@ -19,7 +19,12 @@ export const useScreenStore = create<ScreenStore>((set) => ({
     set({ isScreening: true, error: null });
     try {
       // 后端返回 { run_id: string; result: RunDetail }
-      const data = await apiPost<{ run_id: string | null; result: any }>('/api/v1/screen', params);
+      // 选股耗时较长(数据源回退+LLM排序+日线补充), 超时设为10分钟
+      const data = await apiPost<{ run_id: string | null; result: any }>(
+        '/api/v1/screen',
+        params,
+        { timeout: 600000 },
+      );
       const result = data.result as RunDetail;
       const runDetail: RunDetail = {
         ...result,
