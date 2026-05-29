@@ -39,8 +39,8 @@ COPY web/api/ web/api/
 COPY web/logging_config.py web/
 RUN pip install --no-cache-dir ".[web]"
 
-# 前端构建产物（来自 Stage 1）
-COPY --from=frontend-builder /app/web/frontend/dist web/static/
+# 前端构建产物（Vite outDir='../static' → /app/web/static/）
+COPY --from=frontend-builder /app/web/static web/static/
 
 # 数据目录 + 日志目录
 RUN mkdir -p /app/data/runs /app/data/reports /app/logs
