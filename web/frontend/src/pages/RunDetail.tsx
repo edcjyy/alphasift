@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { ArrowLeft, BarChart3, TrendingUp, Activity, Brain } from 'lucide-react';
 import { apiGet } from '@/api';
-import type { RunDetail } from '@/types';
+import type { RunDetail, StrategySummary } from '@/types';
 import PickTable from '@/components/PickTable';
 
 const COLORS = [
@@ -36,6 +36,7 @@ export default function RunDetail() {
   const navigate = useNavigate();
   const [run, setRun] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [strategyNames, setStrategyNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!runId) return;
@@ -53,6 +54,17 @@ export default function RunDetail() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [runId]);
+
+  // 获取策略名称映射
+  useEffect(() => {
+    apiGet<StrategySummary[]>('/api/v1/strategies')
+      .then((data) => {
+        const map: Record<string, string> = {};
+        data.forEach((s) => { map[s.name] = s.display_name ?? s.name; });
+        setStrategyNames(map);
+      })
+      .catch(() => {});
+  }, []);
 
   if (loading) {
     return (
@@ -118,7 +130,18 @@ export default function RunDetail() {
           </div>
           <div>
             <div className="text-gray-500">策略</div>
-            <div className="mt-0.5">{run.strategy}</div>
+            <div className="mt-0.5">
+              {strategyNames[run.strategy] ? (
+                <>
+                  <span>{strategyNames[run.strategy]}</span>
+                  {strategyNames[run.strategy] !== run.strategy && (
+                    <span className="text-xs text-gray-500 ml-1.5 font-mono">{run.strategy}</span>
+                  )}
+                </>
+              ) : (
+                run.strategy
+              )}
+            </div>
           </div>
           <div>
             <div className="text-gray-500">时间</div>

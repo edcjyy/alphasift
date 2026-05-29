@@ -60,6 +60,55 @@ async def list_strategies():
 
 
 # ---------------------------------------------------------------------------
+# GET /strategies/{name} — 查看策略详情（含 YAML 内容）
+# ---------------------------------------------------------------------------
+
+
+@router.get("/strategies/{name}", response_model=dict)
+async def get_strategy(name: str):
+    """按策略名获取完整信息，包括 YAML 源文件内容。"""
+    from alphasift.strategy import list_strategies as _list
+
+    strategies = await run_in_threadpool(_list)
+
+    # 找到对应策略的元信息
+    info = None
+    for s in strategies:
+        if s.name == name:
+            info = s
+            break
+    if info is None:
+        raise HTTPException(status_code=404, detail=f"未找到策略: {name}")
+
+    # 查找 YAML 文件内容
+    strategies_dir = _get_strategies_dir()
+    yaml_content = None
+    source = None
+    for f in sorted(strategies_dir.glob("*.yaml")):
+        try:
+            import yaml
+            data = yaml.safe_load(f.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and data.get("name") == name:
+                yaml_content = f.read_text(encoding="utf-8")
+                source = str(f.name)
+                break
+        except Exception:
+            continue
+
+    return {
+        "name": info.name,
+        "display_name": info.display_name,
+        "description": info.description,
+        "version": info.version,
+        "category": info.category,
+        "tags": info.tags,
+        "market_scope": getattr(info, "market_scope", None),
+        "source_file": source,
+        "yaml": yaml_content,
+    }
+
+
+# ---------------------------------------------------------------------------
 # POST /strategies/upload — 上传策略文件
 # ---------------------------------------------------------------------------
 

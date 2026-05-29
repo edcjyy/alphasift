@@ -1,14 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import { apiGet } from '@/api';
-import type { RunSummary } from '@/types';
+import type { RunSummary, StrategySummary } from '@/types';
 
 export default function RunList() {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [strategy, setStrategy] = useState('');
+  const [strategyNames, setStrategyNames] = useState<Record<string, string>>({});
   const navigate = useNavigate();
+
+  useEffect(() => {
+    apiGet<StrategySummary[]>('/api/v1/strategies')
+      .then((data) => {
+        const map: Record<string, string> = {};
+        data.forEach((s) => { map[s.name] = s.display_name ?? s.name; });
+        setStrategyNames(map);
+      })
+      .catch(() => {});
+  }, []);
 
   const fetchRuns = (s?: string) => {
     setLoading(true);
@@ -89,7 +100,18 @@ export default function RunList() {
                   <td className="px-4 py-2 font-mono text-xs">
                     {run.run_id.slice(0, 12)}
                   </td>
-                  <td className="px-4 py-2">{run.strategy}</td>
+                  <td className="px-4 py-2">
+                    {strategyNames[run.strategy] ? (
+                      <div>
+                        <span>{strategyNames[run.strategy]}</span>
+                        {strategyNames[run.strategy] !== run.strategy && (
+                          <span className="text-xs text-gray-500 ml-1.5 font-mono">{run.strategy}</span>
+                        )}
+                      </div>
+                    ) : (
+                      run.strategy
+                    )}
+                  </td>
                   <td className="px-4 py-2 text-gray-400">{run.created_at}</td>
                   <td className="px-4 py-2">{run.picks_count}</td>
                   <td className="px-4 py-2">

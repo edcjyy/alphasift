@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Loader2, AlertCircle } from 'lucide-react';
 import { useScreenStore } from '@/stores/screenStore';
@@ -17,6 +17,13 @@ export default function Screen() {
   const { isScreening, currentResult, error, startScreen, clearResult } =
     useScreenStore();
   const navigate = useNavigate();
+
+  // name → display_name 映射
+  const strategyNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    strategies.forEach((s) => { map[s.name] = s.display_name ?? s.name; });
+    return map;
+  }, [strategies]);
 
   useEffect(() => {
     apiGet<StrategySummary[]>('/api/v1/strategies')
@@ -144,7 +151,7 @@ export default function Screen() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">选股结果</h2>
             <div className="flex gap-3 text-sm text-gray-400">
-              <span>策略: {currentResult.strategy}</span>
+              <span>策略: {strategyNames[currentResult.strategy] ?? currentResult.strategy}</span>
               <span>时间: {currentResult.created_at}</span>
               <span>候选: {currentResult.total_candidates}</span>
               <button
