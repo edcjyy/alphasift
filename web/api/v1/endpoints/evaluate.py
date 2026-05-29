@@ -36,7 +36,7 @@ def _transform_eval_result(raw_result, run_id: str) -> dict:
             "exit_price": p.current_price or 0,
             "return_pct": p.return_pct or 0,
             "max_drawdown_pct": getattr(p, "max_drawdown_pct", 0) or 0,
-            "win": getattr(p, "status", "") == "win",
+            "win": (p.return_pct or 0) >= 0,
             "final_score": getattr(p, "final_score", 0) or 0,
             "llm_sector": getattr(p, "llm_sector", "") or "",
             "llm_tags": getattr(p, "llm_tags", []) or [],
