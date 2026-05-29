@@ -126,6 +126,14 @@ def validate_changes(
     warned_penalty = len(result.warned) * 0.05
     result.score = max(0.0, min(1.0, passed_ratio - warned_penalty))
 
+    logger.info(
+        "Critic validation: passed=%d warned=%d rejected=%d score=%.2f [%s/%s]",
+        len(result.passed), len(result.warned), len(result.rejected),
+        result.score, strategy_name, strategy_category,
+    )
+    for r in result.rejected:
+        logger.debug("Critic rejected: %s → %s", r["change"].target, r["reason"])
+
     return result
 
 

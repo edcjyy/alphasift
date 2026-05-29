@@ -101,6 +101,10 @@ def analyze_sensitivity(
 
     # Sort by sensitivity descending
     reports.sort(key=lambda r: r.sensitivity_score, reverse=True)
+
+    if reports:
+        logger.info("Sensitivity: %s — %d params, top=%s(%.2f)",
+                     strategy_name, len(reports), reports[0].parameter, reports[0].sensitivity_score)
     return reports
 
 
