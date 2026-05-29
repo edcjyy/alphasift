@@ -43,10 +43,8 @@ async def run_evaluate(run_id: str, req: EvaluateRequest | None = None):
         eval_result = await run_in_threadpool(
             evaluate_saved_run,
             run_id,
-            data_dir=config.data_dir,
-            explain=req.explain,
-            with_price_path=req.with_price_path,
             config=config,
+            with_price_path=req.with_price_path,
         )
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"未找到运行记录: {run_id}")

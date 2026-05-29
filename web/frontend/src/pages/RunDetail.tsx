@@ -211,7 +211,7 @@ export default function RunDetail() {
         </div>
       </div>
 
-      {/* Row 2: 得分分布 + LLM 评分散点图 / 评估按钮 */}
+      {/* Row 2: 得分分布 + 评估入口（始终可见） */}
       <div className="grid grid-cols-2 gap-4">
         {/* 得分分布 */}
         <div className="bg-surface rounded-xl border border-border p-4">
@@ -233,8 +233,22 @@ export default function RunDetail() {
           </ResponsiveContainer>
         </div>
 
-        {/* LLM 散点图 或 评估入口 */}
-        {hasLLM ? (
+        {/* 评估入口 — 始终显示 */}
+        <div className="bg-surface rounded-xl border border-border p-4 flex flex-col items-center justify-center gap-4">
+          <BarChart3 className="w-12 h-12 text-accent" />
+          <p className="text-gray-400 text-sm">执行 T+N 评估查看收益表现</p>
+          <button
+            onClick={() => navigate(`/evaluate/${run.run_id}`)}
+            className="px-6 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm transition-colors"
+          >
+            执行评估
+          </button>
+        </div>
+      </div>
+
+      {/* Row 3: LLM 散点图（仅当有 LLM 评分时显示） */}
+      {hasLLM && (
+        <div className="grid grid-cols-2 gap-4">
           <div className="bg-surface rounded-xl border border-border p-4">
             <h2 className="font-medium mb-3 flex items-center gap-2">
               <Brain className="w-4 h-4 text-purple-400" />
@@ -273,19 +287,8 @@ export default function RunDetail() {
               </ScatterChart>
             </ResponsiveContainer>
           </div>
-        ) : (
-          <div className="bg-surface rounded-xl border border-border p-4 flex flex-col items-center justify-center gap-4">
-            <BarChart3 className="w-12 h-12 text-accent" />
-            <p className="text-gray-400 text-sm">执行 T+N 评估查看收益表现</p>
-            <button
-              onClick={() => navigate(`/evaluate/${run.run_id}`)}
-              className="px-6 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm transition-colors"
-            >
-              执行评估
-            </button>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 排名表格 */}
       <div className="bg-surface rounded-xl border border-border">
