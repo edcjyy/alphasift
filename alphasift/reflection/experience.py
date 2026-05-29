@@ -57,8 +57,10 @@ CREATE INDEX IF NOT EXISTS idx_improved ON evolution_records(improved);
 """
 
 
-def _get_db_path(data_dir: Path) -> Path:
+def _get_db_path(data_dir: Path | str) -> Path:
     """Get the SQLite database path."""
+    if isinstance(data_dir, str):
+        data_dir = Path(data_dir)
     db_path = data_dir / ".reflection.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return db_path

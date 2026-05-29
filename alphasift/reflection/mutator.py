@@ -21,13 +21,18 @@ def _now() -> str:
 
 
 def _resolve_yaml_path(data: dict, path: str) -> tuple[dict, str]:
-    """Resolve dotted path in nested dict. Returns (parent_dict, key_name)."""
+    """Resolve dotted path in nested dict. Returns (parent_dict, key_name).
+    
+    Raises KeyError if any intermediate key is missing.
+    """
     parts = path.split(".")
     current = data
     for part in parts[:-1]:
         if part not in current:
-            current[part] = {}
+            raise KeyError(f"Path component '{part}' not found in {path}")
         current = current[part]
+        if not isinstance(current, dict):
+            raise TypeError(f"Path component '{part}' is not a dict in {path}")
     return current, parts[-1]
 
 
