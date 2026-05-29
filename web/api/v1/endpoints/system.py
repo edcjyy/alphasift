@@ -20,21 +20,40 @@ router = APIRouter(tags=["system"])
 #  only keys in this list can be read/updated via the API.
 # ---------------------------------------------------------------------------
 ENV_WHITELIST = {
-    # LLM
+    # LLM — LiteLLM 主体系（推荐）
+    "LITELLM_MODEL",
+    "LITELLM_FALLBACK_MODELS",
+    "LLM_CHANNELS",
+    "LITELLM_CONFIG",
+    # LLM — 旧版兼容
     "LLM_MODEL",
     "LLM_BASE_URL",
+    "LLM_API_KEY",
     "LLM_TEMPERATURE",
-    "LLM_RANK_WEIGHT",
+    "LLM_CONTEXT",
     "LLM_JSON_MODE",
     "LLM_SILENT",
+    "LLM_RANK_WEIGHT",
+    "OPENAI_BASE_URL",
+    # LLM — 候选上下文
+    "LLM_CANDIDATE_MULTIPLIER",
+    "LLM_MAX_CANDIDATES",
+    "LLM_MAX_RETRIES",
+    "LLM_MIN_COVERAGE",
+    "LLM_CONTEXT_MAX_CHARS",
     "LLM_CANDIDATE_CONTEXT_ENABLED",
     "LLM_CANDIDATE_CONTEXT_MAX_CANDIDATES",
     "LLM_CANDIDATE_CONTEXT_PROVIDERS",
     "LLM_CANDIDATE_CONTEXT_NEWS_LIMIT",
     "LLM_CANDIDATE_CONTEXT_ANNOUNCEMENT_LIMIT",
+    "LLM_CANDIDATE_CONTEXT_CACHE_ENABLED",
+    "LLM_CANDIDATE_CONTEXT_CACHE_TTL_HOURS",
     # snapshot data source
     "SNAPSHOT_SOURCE_PRIORITY",
     "TUSHARE_API_URL",
+    "TUSHARE_TOKEN",
+    "TUSHARE_API_TOKEN",
+    "TUSHARE_TRADE_DATE",
     # DSA
     "DSA_API_URL",
     "DSA_REPORT_TYPE",
@@ -45,6 +64,8 @@ ENV_WHITELIST = {
     # post-analyzers
     "POST_ANALYZERS",
     "POST_ANALYSIS_MAX_PICKS",
+    "POST_ANALYZER_URL",
+    "POST_ANALYZER_TIMEOUT_SEC",
     # risk
     "RISK_ENABLED",
     "RISK_MAX_PENALTY",
@@ -58,6 +79,7 @@ ENV_WHITELIST = {
     "DAILY_ENRICH_MAX_CANDIDATES",
     "DAILY_LOOKBACK_DAYS",
     "DAILY_SOURCE",
+    "DAILY_FETCH_RETRIES",
     # evaluation
     "EVALUATION_COST_BPS",
     "EVALUATION_FOLLOW_THROUGH_PCT",
@@ -66,11 +88,19 @@ ENV_WHITELIST = {
     "EVALUATION_PRICE_PATH_LOOKBACK_DAYS",
     # data dir
     "ALPHASIFT_DATA_DIR",
+    "STRATEGIES_DIR",
+    # industry
+    "INDUSTRY_MAP_FILES",
+    "INDUSTRY_PROVIDER",
+    "INDUSTRY_PROVIDER_MAX_BOARDS",
 }
 
 # Keys that contain secrets — mask on read, never echo back full value
 ENV_SENSITIVE_KEYS = {
-    "TUSHARE_API_URL",  # may contain token in query string
+    "LLM_API_KEY",        # API key
+    "TUSHARE_API_URL",    # may contain token in query string
+    "TUSHARE_TOKEN",      # Tushare Pro token
+    "TUSHARE_API_TOKEN",  # alias
 }
 
 
