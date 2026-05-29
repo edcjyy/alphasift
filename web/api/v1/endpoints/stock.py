@@ -60,24 +60,21 @@ def _fetch_kline(code: str, period: str, count: int) -> dict:
     try:
         import akshare as ak
     except ImportError:
-        raise HTTPException(status_code=500, detail="akshare 未安装，无法获取K线数据")
+        raise HTTPException(status_code=500, detail="akshare 未安装，请执行: pip install akshare")
+
+    from datetime import date
+
+    end_d = date.today().strftime("%Y%m%d")
+    start_d = date.today().replace(year=date.today().year - 2).strftime("%Y%m%d")
 
     # 获取K线
-    if period in ("daily", "weekly", "monthly"):
-        df = ak.stock_zh_a_hist(
-            symbol=raw,
-            period=ak_period,
-            start_date="",
-            end_date="",
-            adjust="qfq",  # 前复权
-        )
-    else:
-        # 分钟级别需要特殊处理
-        df = ak.stock_zh_a_hist_min_em(
-            symbol=raw,
-            period=ak_period,
-            adjust="qfq",
-        )
+    df = ak.stock_zh_a_hist(
+        symbol=raw,
+        period=ak_period,
+        start_date=start_d,
+        end_date=end_d,
+        adjust="qfq",
+    )
 
     if df is None or df.empty:
         return {"code": code, "name": "", "period": period, "data": []}
