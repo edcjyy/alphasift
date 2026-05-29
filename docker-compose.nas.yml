@@ -1,50 +1,55 @@
 # AlphaSift WebUI — NAS Docker Compose 部署配置
 #
 # 使用方式:
-#   docker compose -f docker-compose.nas.yml up -d --build
+#   docker compose -f docker-compose.nas.yml up -d
 #
 # 前提条件:
 #   1. 飞牛 NAS 已安装 Docker
-#   2. DSA 服务已在 NAS 上运行（端口 8000 或其他）
-#   3. .env 文件包含 LLM API Key 和 Tushare Token
+#   2. 已在 GitHub Actions 构建并推送镜像到 GHCR / Docker Hub
+#   3. 在 NAS 上创建目录结构:
+#      mkdir -p /vol1/1000/docker/alphasift/{data,logs,strategies}
+#   4. 将 .env 文件放到 /vol1/1000/docker/alphasift/.env
+#      （至少包含 TUSHARE_TOKEN、LLM 配置、DSA_API_URL 等）
+
+x-common: &common
+  image: ghcr.io/edcjyy/alphasift:latest
+  restart: unless-stopped
+  env_file:
+    - /vol1/1000/docker/alphasift/.env
+  volumes:
+    - /vol1/1000/docker/alphasift/data:/app/data
+    - /vol1/1000/docker/alphasift/logs:/app/logs
+    - /vol1/1000/docker/alphasift/.env:/app/.env
+    - /vol1/1000/docker/alphasift/strategies:/app/strategies:ro
+  environment:
+    - TZ=Asia/Shanghai
+    - ALPHASIFT_DATA_DIR=/app/data
+    - LOG_DIR=/app/logs
+    - STRATEGIES_DIR=/app/strategies
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+  deploy:
+    resources:
+      limits:
+        memory: 1G
+      reservations:
+        memory: 384M
 
 services:
-  alphasift:
-    build:
-      context: .
-      dockerfile: web/Dockerfile
-    container_name: alphasift
-    restart: unless-stopped
+  # AlphaSift WebUI（包含定时选股调度）
+  webui:
+    <<: *common
+    container_name: alphasift-webui
+    # 覆盖镜像默认端口 8080 → 19600
+    command: ["uvicorn", "web.api.app:create_app", "--host", "0.0.0.0", "--port", "19600", "--factory"]
     ports:
-      - "${ALPHASIFT_PORT:-8080}:8080"
-    volumes:
-      - alphasift-data:/app/data
-      - alphasift-logs:/app/logs
-      - ./.env:/app/.env
-      # 自定义策略目录挂载（NAS 上放 yaml 文件即可自动加载）
-      # 如果不需要自定义策略，注释掉下面两行即可（容器内使用内置策略）
-      - alphasift-strategies:/app/strategies
-    environment:
-      - ALPHASIFT_DATA_DIR=/app/data
-      - LOG_DIR=/app/logs
-      - STRATEGIES_DIR=/app/strategies
-      # DSA 联动：DSA_API_URL 从 .env 读取
-      - DSA_API_URL=${DSA_API_URL:-http://host.docker.internal:8000}
-    # host 网络模式，可直接访问 NAS 上的其他服务
-    network_mode: host
-    mem_limit: 1024m
-    mem_reservation: 512m
-    cpus: 2
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "3"
-
-volumes:
-  alphasift-data:
-    driver: local
-  alphasift-logs:
-    driver: local
-  alphasift-strategies:
-    driver: local
+      - "19600:19600"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:19600/api/v1/system/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

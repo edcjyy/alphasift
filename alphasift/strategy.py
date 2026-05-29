@@ -246,19 +246,30 @@ def load_strategy(filepath: Path) -> Strategy:
 
 
 def load_all_strategies(strategies_dir: Path) -> dict[str, Strategy]:
-    """Load all strategies from a directory."""
+    """Load all strategies from a directory, falling back to bundled for any missing."""
     _validate_strategy_dir_sync(strategies_dir)
     strategies = {}
-    if not strategies_dir.is_dir():
-        return strategies
-    for f in sorted(strategies_dir.glob("*.yaml")):
-        try:
-            s = load_strategy(f)
-            if s.screening.enabled:
-                strategies[s.name] = s
-        except Exception as e:
-            logger.warning("Failed to load strategy %s: %s", f.name, e)
-            continue
+    # 1) Load from the primary directory (custom / user-provided)
+    if strategies_dir.is_dir():
+        for f in sorted(strategies_dir.glob("*.yaml")):
+            try:
+                s = load_strategy(f)
+                if s.screening.enabled:
+                    strategies[s.name] = s
+            except Exception as e:
+                logger.warning("Failed to load strategy %s: %s", f.name, e)
+                continue
+    # 2) Fall back to bundled strategies for any not already loaded
+    bundled_dir = _BUNDLED_STRATEGIES_DIR
+    if bundled_dir.is_dir():
+        for f in sorted(bundled_dir.glob("*.yaml")):
+            try:
+                s = load_strategy(f)
+                if s.name not in strategies and s.screening.enabled:
+                    strategies[s.name] = s
+            except Exception as e:
+                logger.warning("Failed to load bundled strategy %s: %s", f.name, e)
+                continue
     return strategies
 
 
@@ -285,7 +296,14 @@ def list_strategies(strategies_dir: Path | None = None) -> list[StrategyInfo]:
 
 
 def _validate_strategy_dir_sync(strategies_dir: Path) -> None:
-    """Fail fast if bundled strategy mirrors drift apart from built-in repo files."""
+    """Fail fast if bundled strategy mirrors drift apart from built-in repo files.
+
+    Skips validation when STRATEGIES_DIR is explicitly set via environment variable,
+    allowing custom/deployment-specific strategy directories (e.g. NAS volume mounts).
+    """
+    import os as _os
+    if _os.getenv("STRATEGIES_DIR"):
+        return
     resolved = strategies_dir.resolve()
     repo_dir = (_PROJECT_ROOT / "strategies").resolve()
     bundled_dir = _BUNDLED_STRATEGIES_DIR.resolve()
