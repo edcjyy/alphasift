@@ -74,6 +74,79 @@ for p in result.picks:
     print(f"{p.rank}. {p.code} {p.name} score={p.final_score:.1f}")
 ```
 
+## WebUI（可选）
+
+除 CLI 外，AlphaSift 也提供基于 FastAPI + React 的 Web 操作界面，适合部署到 NAS 或服务器上长期运行。
+
+### 本地开发调试
+
+```bash
+# 安装项目及 Web 依赖（在 alphasift 根目录执行一次）
+pip install -e ".[web]"
+
+# 终端 1 — 启动后端 API（端口 8080）
+python web/serve.py             # 默认 8080
+python web/serve.py --port 9000 # 自定义端口
+python web/serve.py --reload    # 代码变更自动重启
+
+# 终端 2 — 启动前端 Vite 开发服务器（端口 5173，自动代理到后端）
+cd web/frontend && npm install && npm run dev
+
+# 浏览器打开 http://localhost:5173
+# Swagger API 文档 http://localhost:8080/docs
+```
+
+### 端口配置
+
+支持命令行参数和环境变量，优先级：**命令行 > 环境变量 > 默认值**。
+
+| 端口 | 默认值 | 命令行 | 环境变量 |
+|------|--------|--------|----------|
+| 后端 API | 8080 | `--port 9000` | `ALPHASIFT_API_PORT` |
+| 前端开发 | 5173 | `npm run dev -- --port 3000` | `VITE_DEV_PORT`（在 `.env` 中设置） |
+| 前端代理目标 | `http://127.0.0.1:8080` | — | `VITE_API_TARGET`（在 `.env` 中设置） |
+
+### NAS Docker 部署
+
+```bash
+# 使用 docker-compose
+docker-compose -f docker-compose.nas.yml up -d
+
+# 访问 http://<NAS-IP>:8080
+```
+
+容器内 FastAPI 同时托管 API 和静态前端文件，使用主机网络模式以便与同机部署的 DSA 服务联动。
+
+### WebUI 功能
+
+| 功能 | 说明 |
+|------|------|
+| **选股面板** | 选择策略 → 设置参数 → 一键筛选，实时展示结果表格 |
+| **运行记录** | 查看历史选股运行列表，按策略名称筛选 |
+| **运行详情** | 查看单次运行的行业分布饼图、涨跌幅分布、得分分布、LLM 评分 vs 筛选评分散点图 |
+| **T+N 评估** | 对历史运行执行回测评估，查看收益率柱状图和详细表格 |
+| **策略管理** | 查看所有可用策略及其参数 |
+| **定时任务** | 创建 cron 定时选股任务，支持启用/禁用/编辑/删除/手动触发 |
+| **环境配置** | 在线编辑 `.env` 环境变量，按分组（LLM/数据源/DSA/风险/评估）配置，保存后提示是否需要重启 |
+
+### WebUI API 端点
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/v1/screen` | 执行选股 |
+| `GET` | `/api/v1/runs` | 获取运行列表 |
+| `GET` | `/api/v1/runs/{run_id}` | 获取运行详情 |
+| `POST` | `/api/v1/evaluate/{run_id}` | 执行 T+N 评估 |
+| `GET` | `/api/v1/strategies` | 获取策略列表 |
+| `GET` | `/api/v1/system/health` | 系统健康检查 |
+| `GET` | `/api/v1/system/env` | 读取可配置环境变量 |
+| `PUT` | `/api/v1/system/env` | 更新环境变量 |
+| `POST` | `/api/v1/schedule` | 创建定时任务 |
+| `GET` | `/api/v1/schedule` | 列出所有定时任务 |
+| `PUT` | `/api/v1/schedule/{id}` | 更新定时任务 |
+| `DELETE` | `/api/v1/schedule/{id}` | 删除定时任务 |
+| `POST` | `/api/v1/schedule/{id}/run` | 手动触发定时任务 |
+
 ## 环境变量
 
 | 变量 | 必须 | 说明 | 默认值 |
