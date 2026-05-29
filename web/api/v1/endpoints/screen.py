@@ -44,18 +44,22 @@ async def run_screen(
         use_llm=req.use_llm,
         daily_enrich=req.daily_enrich,
         post_analyzers=req.post_analyzers,
-        explain=req.explain,
-        save_run=req.save_run,
         config=config,
-        context=req.context,
-        context_files=req.context_files,
+        llm_context=req.context,
+        llm_context_files=req.context_files,
         candidate_context_files=req.candidate_context_files,
-        collect_candidate_context=req.collect_candidate_context,
+        collect_llm_candidate_context=req.collect_candidate_context,
         candidate_context_max_candidates=req.candidate_context_max_candidates,
         candidate_context_providers=req.candidate_context_providers,
-        candidate_context_news_limit=req.candidate_context_news_limit,
-        candidate_context_announcement_limit=req.candidate_context_announcement_limit,
     )
+
+    # save_run: screen() 本身不保存，需要在调用后手动保存
+    if req.save_run:
+        from alphasift.store import save_screen_result
+        try:
+            save_screen_result(result, data_dir=config.data_dir)
+        except Exception as exc:
+            logger.warning("Failed to save screen result: %s", exc)
 
     # ScreenResult 是 dataclass，序列化为 dict 返回
     result_dict = asdict(result)
