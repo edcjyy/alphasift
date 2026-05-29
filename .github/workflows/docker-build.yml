@@ -3,13 +3,12 @@ name: Docker Build & Publish
 on:
   push:
     branches: [main, main2]
+    tags:
+      - 'v*.*.*'
     paths-ignore:
       - '**.md'
       - 'docs/**'
       - '.gitignore'
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       release_tag:
