@@ -49,6 +49,26 @@ screening:
     value_quality_stability_min: 65.0
     value_quality_bonus: 3.0
     volume_spike_ratio: 4.0
+  regime_weights:
+    bullish:
+      description: "牛市中价值跑输——引入动量因子改善择时，微量降低价值权重"
+      filter_mult:
+        pe_ttm_max: 1.15
+      factor_mult:
+        value: 0.85
+        momentum: 1.40
+        quality: 1.10
+      risk_mult:
+        chase_change_pct: 1.20
+    bearish:
+      description: "价值策略在熊市最有效——强化价值+质量，收紧安全边际"
+      filter_mult:
+        pe_ttm_max: 0.80
+        pb_max: 0.85
+      factor_mult:
+        value: 1.30
+        quality: 1.15
+        stability: 1.15
   ranking_hints: |
     优先考虑：
     1. 行业地位高、现金流质量好、分红稳定

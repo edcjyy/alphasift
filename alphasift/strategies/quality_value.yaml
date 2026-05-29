@@ -55,6 +55,27 @@ screening:
     value_quality_stability_min: 68.0
     value_quality_bonus: 2.8
     volume_spike_ratio: 4.0
+  regime_weights:
+    bullish:
+      description: "牛市价值不占优，微量降低价值、引入动量"
+      filter_mult:
+        pe_ttm_max: 1.10
+      factor_mult:
+        value: 0.90
+        momentum: 1.15
+        quality: 1.05
+    bearish:
+      description: "熊市防御——强化价值+稳定，收紧估值上限"
+      filter_mult:
+        pe_ttm_max: 0.75
+        pb_max: 0.85
+      factor_mult:
+        value: 1.25
+        stability: 1.25
+        quality: 1.15
+      risk_mult:
+        chase_change_pct: 0.80
+        abnormal_volume_ratio: 0.75
   ranking_hints: |
     优先关注：
     1. 估值合理且不是依赖单日情绪推动的标的

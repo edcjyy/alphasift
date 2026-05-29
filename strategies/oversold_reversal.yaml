@@ -52,6 +52,29 @@ screening:
     controlled_reversal_min: 70.0
     controlled_reversal_bonus: 2.0
     volume_spike_ratio: 5.5
+  regime_weights:
+    bullish:
+      description: "牛市超跌标的稀少，微量参与即可，降低反转权重"
+      filter_mult:
+        change_pct_min: 1.50
+      factor_mult:
+        reversal: 0.60
+        momentum: 1.30
+      risk_mult:
+        breakdown_change_pct: 0.85
+    bearish:
+      description: "熊市是超跌反转最佳应用场景——跌出来的机会"
+      filter_mult:
+        amount_min: 0.70
+        change_pct_min: 0.70
+      factor_mult:
+        reversal: 1.30
+        value: 1.20
+        stability: 1.15
+      risk_mult:
+        breakdown_change_pct: 1.10
+      scorecard_mult:
+        controlled_reversal_bonus: 1.25
   ranking_hints: |
     优先关注：
     1. 下跌幅度可控、不是基本面或退市风险驱动的连续杀跌

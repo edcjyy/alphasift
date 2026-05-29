@@ -56,6 +56,24 @@ screening:
     capital_confirmed_bonus: 1.8
     volume_spike_ratio: 5.5
     hot_money_penalty: 2.2
+  regime_weights:
+    bullish:
+      description: "牛市轻估值、重趋势——动量+活跃度上浮，微降价值"
+      filter_mult:
+        pe_ttm_max: 1.15
+      factor_mult:
+        momentum: 1.10
+        value: 0.90
+    bearish:
+      description: "熊市防御三角——价值+质量+稳定性同时上浮"
+      filter_mult:
+        pe_ttm_max: 0.80
+        change_pct_min: 0.80
+      factor_mult:
+        value: 1.15
+        quality: 1.10
+        stability: 1.10
+        momentum: 0.90
   ranking_hints: |
     优先关注：
     1. 多个维度都不差的候选，而不是单一指标极端突出

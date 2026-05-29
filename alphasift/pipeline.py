@@ -16,7 +16,7 @@ from alphasift.filter import apply_hard_filters, requires_daily_features, withou
 from alphasift.financial import enrich_roe
 from alphasift.industry import enrich_industry_concepts
 from alphasift.market_state import apply_market_state_weights, assess_market_state
-from alphasift.models import Pick, ScreenResult
+from alphasift.models import Pick, RegimeOverrides, ScreeningConfig, ScreenResult
 from alphasift.post_analysis import normalize_post_analyzers, run_post_analyzers
 from alphasift.ranker import rank_candidates_with_metadata
 from alphasift.risk import apply_portfolio_overlay, apply_risk_overlay
@@ -25,6 +25,117 @@ from alphasift.snapshot import fetch_snapshot_with_fallback
 from alphasift.strategy import load_all_strategies
 
 logger = logging.getLogger(__name__)
+
+
+# Allowed regimes (must match those in MarketState.regime + "neutral")
+_VALID_REGIMES = {"bullish", "bearish", "neutral", "volatile", "polarized"}
+
+
+def _apply_regime_overrides(
+    screening: ScreeningConfig,
+    regime: str,
+) -> tuple[ScreeningConfig, str]:
+    """Apply per-regime parameter overrides from strategy YAML.
+
+    Returns (modified_screening, description_string).
+    If no regime config exists for this regime, returns the original screening unchanged.
+    """
+    if not regime or regime == "neutral" or regime not in _VALID_REGIMES:
+        return screening, ""
+
+    regime_overrides = screening.regime_weights.get(regime)
+    if regime_overrides is None:
+        return screening, ""
+
+    overrides = regime_overrides  # type: RegimeOverrides
+    desc_parts: list[str] = []
+
+    # --- filter_mult: apply multipliers to HardFilterConfig numeric fields ---
+    filter_mult = overrides.filter_mult
+    if filter_mult:
+        hf = screening.hard_filters
+        multi_fields = [
+            "price_min", "price_max", "amount_min",
+            "market_cap_min", "market_cap_max",
+            "pe_ttm_min", "pe_ttm_max",
+            "pb_min", "pb_max",
+            "volume_ratio_min", "turnover_rate_min",
+            "change_pct_min", "change_pct_max",
+            "change_60d_min", "change_60d_max",
+            "change_5d_min", "change_5d_max",
+            "change_20d_min", "change_20d_max",
+            "change_120d_min", "change_120d_max",
+            "signal_score_min",
+            "breakout_20d_pct_min", "breakout_20d_pct_max",
+            "range_20d_pct_max",
+            "volume_ratio_20d_min", "volume_ratio_20d_max",
+            "body_pct_min", "body_pct_max",
+            "pullback_to_ma20_pct_min", "pullback_to_ma20_pct_max",
+        ]
+        applied_filter: list[str] = []
+        for fname, mult in filter_mult.items():
+            if fname not in multi_fields:
+                continue
+            current = getattr(hf, fname, None)
+            if current is not None:
+                new_val = current * mult
+                # Integer fields: round to int
+                if fname in ("signal_score_min",):
+                    setattr(hf, fname, int(round(new_val)))
+                else:
+                    setattr(hf, fname, new_val)
+                applied_filter.append(f"{fname}(×{mult:.2f})")
+        if applied_filter:
+            desc_parts.append(f"filter: {', '.join(applied_filter)}")
+
+    # --- factor_mult: apply multipliers to factor_weights ---
+    factor_mult = overrides.factor_mult
+    if factor_mult and screening.factor_weights:
+        applied_factor: list[str] = []
+        for fname, mult in factor_mult.items():
+            if fname in screening.factor_weights:
+                screening.factor_weights[fname] *= mult
+                applied_factor.append(f"{fname}(×{mult:.2f})")
+        # Re-normalize
+        total = sum(screening.factor_weights.values())
+        if total > 0:
+            for k in screening.factor_weights:
+                screening.factor_weights[k] /= total
+        if applied_factor:
+            desc_parts.append(f"factor: {', '.join(applied_factor)}")
+
+    # --- risk_mult: apply multipliers to risk_profile ---
+    risk_mult = overrides.risk_mult
+    if risk_mult and screening.risk_profile:
+        applied_risk: list[str] = []
+        for k, mult in risk_mult.items():
+            if k in screening.risk_profile:
+                screening.risk_profile[k] *= mult
+                applied_risk.append(f"{k}(×{mult:.2f})")
+        if applied_risk:
+            desc_parts.append(f"risk: {', '.join(applied_risk)}")
+
+    # --- scorecard_mult: apply multipliers to scorecard_profile ---
+    sc_mult = overrides.scorecard_mult
+    if sc_mult and screening.scorecard_profile:
+        applied_sc: list[str] = []
+        for k, mult in sc_mult.items():
+            if k in screening.scorecard_profile:
+                screening.scorecard_profile[k] *= mult
+                applied_sc.append(f"{k}(×{mult:.2f})")
+        if applied_sc:
+            desc_parts.append(f"scorecard: {', '.join(applied_sc)}")
+
+    # --- tech_weight: direct override ---
+    if overrides.tech_weight is not None:
+        screening.tech_weight = overrides.tech_weight
+        desc_parts.append(f"tech_weight={overrides.tech_weight:.2f}")
+
+    desc = f"regime={regime} | " + " | ".join(desc_parts) if desc_parts else ""
+    if overrides.description:
+        desc = f"{desc} ({overrides.description})" if desc else overrides.description
+
+    return screening, desc
 
 
 def screen(
@@ -92,6 +203,52 @@ def screen(
 
     strat = strategies[strategy]
     screening = strat.screening
+
+    # ---- Regime-aware filter adjustments (applied early, before hard filters) ----
+    # Only filter_mult is applied here; factor/risk/scorecard adjustments happen later
+    # when snapshot-based breadth data is available for more accurate regime detection.
+    regime_state = None
+    if config.risk_enabled:
+        regime_state = assess_market_state(source="auto")
+        if regime_state and regime_state.regime != "neutral":
+            regime_overrides = screening.regime_weights.get(regime_state.regime)
+            if regime_overrides and regime_overrides.filter_mult:
+                hf = screening.hard_filters
+                _multi_fields = [
+                    "price_min", "price_max", "amount_min",
+                    "market_cap_min", "market_cap_max",
+                    "pe_ttm_min", "pe_ttm_max", "pb_min", "pb_max",
+                    "volume_ratio_min", "turnover_rate_min",
+                    "change_pct_min", "change_pct_max",
+                    "change_60d_min", "change_60d_max",
+                    "change_5d_min", "change_5d_max",
+                    "change_20d_min", "change_20d_max",
+                    "change_120d_min", "change_120d_max",
+                    "signal_score_min",
+                    "breakout_20d_pct_min", "breakout_20d_pct_max",
+                    "range_20d_pct_max",
+                    "volume_ratio_20d_min", "volume_ratio_20d_max",
+                    "body_pct_min", "body_pct_max",
+                    "pullback_to_ma20_pct_min", "pullback_to_ma20_pct_max",
+                ]
+                applied: list[str] = []
+                for fname, mult in regime_overrides.filter_mult.items():
+                    if fname not in _multi_fields:
+                        continue
+                    current = getattr(hf, fname, None)
+                    if current is not None:
+                        new_val = current * mult
+                        if fname in ("signal_score_min",):
+                            setattr(hf, fname, int(round(new_val)))
+                        else:
+                            setattr(hf, fname, new_val)
+                        applied.append(f"{fname}(×{mult:.2f})")
+                if applied:
+                    ov_desc = regime_overrides.description or regime_state.regime
+                    degradation.append(
+                        f"Regime override ({ov_desc}): filter -> {', '.join(applied)}"
+                    )
+
     if market not in screening.market_scope:
         raise ValueError(
             f"Strategy '{strategy}' does not support market '{market}'. "
@@ -241,33 +398,60 @@ def screen(
             f"Market state: regime={market_state.regime} "
             + " | ".join(market_state.notes)
         )
-        # Extract base weights from screening config (9-factor formula, synced with scorer.py)
-        from alphasift.scorer import _FACTOR_COLUMNS as _cols
-        tw = screening.tech_weight
-        base_weights = screening.factor_weights or {
-            # Fundamental cluster (weight = 1 - tech_weight)
-            "value": (1 - tw) * 0.35,
-            "liquidity": (1 - tw) * 0.15,
-            "stability": (1 - tw) * 0.15,
-            "quality": (1 - tw) * 0.15,
-            "size": (1 - tw) * 0.10,
-            # Technical cluster (weight = tech_weight)
-            "momentum": tw * 0.40,
-            "activity": tw * 0.35,
-            # Cross-cluster factors (split between clusters)
-            "reversal": 0.04,
-            "theme_heat": 0.06,
-        }
-        base_weights = {
-            k: max(float(v), 0.0) for k, v in base_weights.items() if k in _cols
-        }
-        total = sum(base_weights.values())
-        if total > 0:
-            base_weights = {k: v / total for k, v in base_weights.items()}
-        ms_weights = apply_market_state_weights(base_weights, market_state)
+        # Apply YAML-based regime overrides (factor_mult, risk_mult, scorecard_mult, tech_weight)
+        # Note: filter_mult was applied early before hard filtering
+        # factor/risk/scorecard adjustments are applied here because they need the
+        # more accurate snapshot-based regime detection (includes market breadth)
+        regime_overrides_applied = screening.regime_weights.get(market_state.regime)
+        if regime_overrides_applied:
+            # Re-apply late-stage overrides (factor/risk/scorecard/tech_weight only)
+            ov = regime_overrides_applied
+            if ov.factor_mult and screening.factor_weights:
+                for fname, mult in ov.factor_mult.items():
+                    if fname in screening.factor_weights:
+                        screening.factor_weights[fname] *= mult
+                total = sum(screening.factor_weights.values())
+                if total > 0:
+                    for k in screening.factor_weights:
+                        screening.factor_weights[k] /= total
+            if ov.risk_mult and screening.risk_profile:
+                for k, mult in ov.risk_mult.items():
+                    if k in screening.risk_profile:
+                        screening.risk_profile[k] *= mult
+            if ov.scorecard_mult and screening.scorecard_profile:
+                for k, mult in ov.scorecard_mult.items():
+                    if k in screening.scorecard_profile:
+                        screening.scorecard_profile[k] *= mult
+            if ov.tech_weight is not None:
+                screening.tech_weight = ov.tech_weight
+            # Use screening's adjusted factor_weights directly (already applied above)
+            # No need for apply_market_state_weights when YAML overrides are present
+            ms_weights = None
+        else:
+            # Fallback: old hardcoded market_state weight adjustments
+            from alphasift.scorer import _FACTOR_COLUMNS as _cols
+            tw = screening.tech_weight
+            base_weights = screening.factor_weights or {
+                "value": (1 - tw) * 0.35,
+                "liquidity": (1 - tw) * 0.15,
+                "stability": (1 - tw) * 0.15,
+                "quality": (1 - tw) * 0.15,
+                "size": (1 - tw) * 0.10,
+                "momentum": tw * 0.40,
+                "activity": tw * 0.35,
+                "reversal": 0.04,
+                "theme_heat": 0.06,
+            }
+            base_weights = {
+                k: max(float(v), 0.0) for k, v in base_weights.items() if k in _cols
+            }
+            total = sum(base_weights.values())
+            if total > 0:
+                base_weights = {k: v / total for k, v in base_weights.items()}
+            ms_weights = apply_market_state_weights(base_weights, market_state)
         degradation.append(
             "Market-state adjusted weights: "
-            + ", ".join(f"{k}={v:.3f}" for k, v in ms_weights.items())
+            + ", ".join(f"{k}={v:.3f}" for k, v in (screening.factor_weights or {}).items())
         )
 
     df = compute_screen_scores(df, screening, market_state_weights=ms_weights)

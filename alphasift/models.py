@@ -76,6 +76,28 @@ class ScreeningConfig:
     event_profile: dict[str, Any] = field(default_factory=dict)
     ranking_hints: str = ""
     max_output: int = 5
+    # Per-regime parameter overrides (market-state adaptive)
+    regime_weights: dict[str, "RegimeOverrides"] = field(default_factory=dict)
+
+
+@dataclass
+class RegimeOverrides:
+    """Per-regime parameter multipliers for a single market regime.
+
+    All fields are optional; only non-None values are applied.
+    Multipliers apply to the corresponding strategy parameter at runtime:
+      - filter_mult: applied to HardFilterConfig numeric fields
+      - factor_mult: applied to factor_weights dict values
+      - risk_mult: applied to risk_profile dict values
+      - scorecard_mult: applied to scorecard_profile dict values
+    """
+    filter_mult: dict[str, float] = field(default_factory=dict)
+    factor_mult: dict[str, float] = field(default_factory=dict)
+    risk_mult: dict[str, float] = field(default_factory=dict)
+    scorecard_mult: dict[str, float] = field(default_factory=dict)
+    # Direct overrides (absolute values, not multipliers)
+    tech_weight: float | None = None
+    description: str = ""  # human-readable rationale for this regime config
 
 
 @dataclass

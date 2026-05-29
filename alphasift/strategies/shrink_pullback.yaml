@@ -49,6 +49,30 @@ screening:
   scorecard_profile:
     capital_confirmed_bonus: 1.4
     volume_spike_ratio: 4.5
+  regime_weights:
+    bullish:
+      description: "牛市中回踩是加仓机会，放宽回踩距离"
+      filter_mult:
+        volume_ratio_20d_max: 0.80
+        pullback_to_ma20_pct_min: 0.80
+      factor_mult:
+        momentum: 1.15
+        activity: 1.10
+      risk_mult:
+        chase_change_pct: 1.10
+    bearish:
+      description: "熊市中回踩可能变崩盘——更严格靠近MA20，增加防守因子"
+      filter_mult:
+        pullback_to_ma20_pct_min: 1.50
+        signal_score_min: 1.10
+      factor_mult:
+        stability: 1.30
+        quality: 1.20
+        momentum: 0.85
+      risk_mult:
+        chase_change_pct: 0.80
+        abnormal_volume_ratio: 0.75
+        weak_signal_score: 1.20
   ranking_hints: |
     在满足缩量回踩特征的候选中，优先关注：
     1. 回调幅度适中、趋势结构未破坏

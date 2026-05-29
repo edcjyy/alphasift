@@ -57,6 +57,31 @@ screening:
     volume_spike_ratio: 9.0
     hot_money_activity_min: 96.0
     hot_money_penalty: 1.4
+  regime_weights:
+    bullish:
+      description: "牛市突破成功率高，降低横盘确认和实体要求"
+      filter_mult:
+        body_pct_min: 0.75
+      factor_mult:
+        momentum: 1.20
+        activity: 1.10
+      risk_mult:
+        chase_change_pct: 1.05
+    bearish:
+      description: "熊市假突破频发——提高量能和盘整门槛，增加稳定性因子"
+      filter_mult:
+        volume_ratio_min: 1.30
+        body_pct_min: 1.50
+      factor_mult:
+        momentum: 0.80
+        stability: 1.30
+        quality: 1.15
+      risk_mult:
+        chase_change_pct: 0.75
+        abnormal_volume_ratio: 0.80
+        high_turnover_rate: 0.75
+      scorecard_mult:
+        capital_confirmed_bonus: 1.30
   ranking_hints: |
     优先关注：
     1. 突破前有明显横盘整理（至少 10 个交易日）

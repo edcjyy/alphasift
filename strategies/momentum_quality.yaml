@@ -57,6 +57,28 @@ screening:
     capital_confirmed_bonus: 2.4
     volume_spike_ratio: 5.0
     hot_money_penalty: 2.5
+  regime_weights:
+    bullish:
+      description: "牛市趋势延续性强，提高动量，放宽PE上限"
+      filter_mult:
+        pe_ttm_max: 1.20
+      factor_mult:
+        momentum: 1.20
+        value: 0.80
+        quality: 0.90
+    bearish:
+      description: "熊市趋势易断，切换为价值防御，收紧风险"
+      filter_mult:
+        pe_ttm_max: 0.75
+        change_pct_max: 0.85
+      factor_mult:
+        value: 1.25
+        quality: 1.25
+        stability: 1.20
+        momentum: 0.75
+      risk_mult:
+        chase_change_pct: 0.75
+        abnormal_volume_ratio: 0.80
   ranking_hints: |
     优先关注：
     1. 已经确认趋势但还没有进入极端追涨阶段的候选

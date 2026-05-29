@@ -8,6 +8,7 @@ import yaml
 
 from alphasift.models import (
     HardFilterConfig,
+    RegimeOverrides,
     ScreeningConfig,
     Strategy,
     StrategyInfo,
@@ -38,6 +39,7 @@ _SCREENING_KEYS = {
     "event_profile",
     "ranking_hints",
     "max_output",
+    "regime_weights",
 }
 _HARD_FILTER_KEYS = set(HardFilterConfig.__dataclass_fields__.keys())
 _SCORING_PROFILE_KEYS = {
@@ -232,6 +234,7 @@ def load_strategy(filepath: Path) -> Strategy:
         ),
         ranking_hints=screening_data.get("ranking_hints", ""),
         max_output=screening_data.get("max_output", 5),
+        regime_weights=_parse_regime_weights(screening_data.get("regime_weights", {})),
     )
 
     return Strategy(
@@ -326,6 +329,41 @@ def _validate_strategy_dir_sync(strategies_dir: Path) -> None:
                 "Strategy directories are out of sync: "
                 f"strategies/{name} does not match alphasift/strategies/{name}."
             )
+
+
+def _parse_regime_weights(data: dict) -> dict[str, RegimeOverrides]:
+    """Parse per-regime parameter overrides from YAML 'regime_weights' section.
+
+    Expected YAML structure:
+        regime_weights:
+          bullish:
+            filter_mult: { pe_ttm_max: 1.3, amount_min: 0.8 }
+            factor_mult: { momentum: 1.2, value: 0.8 }
+            risk_mult: { chase_change_pct: 1.1 }
+            tech_weight: 0.45
+            description: "Bull market: relax filters, favor momentum"
+          bearish:
+            filter_mult: { pe_ttm_max: 0.7 }
+            factor_mult: { value: 1.3, reversal: 1.2 }
+            ...
+
+    Returns a dict keyed by regime name (bullish/bearish/volatile/polarized).
+    """
+    if not isinstance(data, dict):
+        return {}
+    result = {}
+    for regime, overrides in data.items():
+        if not isinstance(overrides, dict):
+            continue
+        result[regime] = RegimeOverrides(
+            filter_mult=overrides.get("filter_mult", {}),
+            factor_mult=overrides.get("factor_mult", {}),
+            risk_mult=overrides.get("risk_mult", {}),
+            scorecard_mult=overrides.get("scorecard_mult", {}),
+            tech_weight=overrides.get("tech_weight"),
+            description=overrides.get("description", ""),
+        )
+    return result
 
 
 def _raise_unknown_keys(data: dict, allowed_keys: set[str], context: str) -> None:

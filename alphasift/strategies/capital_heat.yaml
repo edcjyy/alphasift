@@ -54,6 +54,31 @@ screening:
     volume_spike_ratio: 8.0
     hot_money_activity_min: 95.0
     hot_money_penalty: 1.5
+  regime_weights:
+    bullish:
+      description: "牛市资金活跃，追涨胜率高，适度放松限制"
+      filter_mult:
+        change_pct_max: 1.05
+      factor_mult:
+        momentum: 1.20
+        activity: 1.10
+      risk_mult:
+        chase_change_pct: 1.15
+        abnormal_volume_ratio: 1.10
+    bearish:
+      description: "熊市追涨是接飞刀——全面收紧风险参数，切换为防御姿态"
+      filter_mult:
+        change_pct_max: 0.80
+        change_pct_min: 1.50
+      factor_mult:
+        momentum: 0.75
+        stability: 1.40
+        quality: 1.20
+      risk_mult:
+        chase_change_pct: 0.70
+        abnormal_volume_ratio: 0.80
+        high_turnover_rate: 0.75
+      tech_weight: 0.45
   ranking_hints: |
     优先关注：
     1. 资金热度和价格表现同步，而不是单纯尾盘异动
