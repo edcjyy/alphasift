@@ -7,12 +7,16 @@ on:
       - '**.md'
       - 'docs/**'
       - '.gitignore'
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
-      image_tag:
-        description: '自定义镜像标签 (如 v1.0.0, latest)'
+      release_tag:
+        description: '发布版本号 (如 v1.0.0，为空则用 latest)'
         required: false
-        default: 'latest'
+        type: string
+        default: ''
 
 concurrency:
   group: docker-${{ github.ref }}
@@ -20,7 +24,11 @@ concurrency:
 
 env:
   GHCR_REGISTRY: ghcr.io
-  GHCR_IMAGE: ${{ github.repository }}
+  DOCKERHUB_REGISTRY: docker.io
+  GHCR_IMAGE_NAME: ${{ github.repository }}
+  DOCKERHUB_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
+  HAS_DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN != '' && 'true' || 'false' }}
+  HAS_DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME != '' && 'true' || 'false' }}
 
 jobs:
   build-and-push:
@@ -31,6 +39,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release ref (tag trigger)
+        if: github.ref_type == 'tag'
+        run: |
+          echo "Using tag ref: ${GITHUB_REF_NAME}"
+          git checkout "${GITHUB_REF_NAME}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -42,25 +58,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve image tags
-        id: tags
-        run: |
-          TAGS="type=raw,value=latest"
-          TAGS="$TAGS"$'\n'"type=sha,format=short"
-          TAGS="$TAGS"$'\n'"type=ref,event=branch"
-          if [[ -n "${{ inputs.image_tag }}" ]]; then
-            TAGS="$TAGS"$'\n'"type=raw,value=${{ inputs.image_tag }}"
-          fi
-          echo "tags<<EOF" >> $GITHUB_OUTPUT
-          echo "$TAGS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Log in to Docker Hub
+        if: env.HAS_DOCKERHUB_TOKEN == 'true' && env.HAS_DOCKERHUB_USERNAME == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKERHUB_REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract Docker metadata
-        id: meta
+      - name: Extract metadata for GHCR
+        id: meta-ghcr
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE }}
-          tags: ${{ steps.tags.outputs.tags }}
+          images: ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=ref,event=tag
+            type=ref,event=branch
+            type=raw,value=${{ inputs.release_tag }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
+            type=sha,format=short
+
+      - name: Extract metadata for Docker Hub
+        id: meta-dockerhub
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=ref,event=tag
+            type=ref,event=branch
+            type=raw,value=${{ inputs.release_tag }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
+            type=sha,format=short
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -69,8 +97,10 @@ jobs:
           file: web/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ${{ steps.meta-ghcr.outputs.tags }}
+            ${{ steps.meta-dockerhub.outputs.tags }}
+          labels: ${{ steps.meta-ghcr.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -78,8 +108,16 @@ jobs:
         run: |
           echo "### Docker 镜像已发布" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 镜像 | Tag |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|-----|" >> "$GITHUB_STEP_SUMMARY"
-          for tag in $(echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n'); do
-            echo "| \`${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE }}\` | \`${tag##*:}\` |" >> "$GITHUB_STEP_SUMMARY"
-          done
+          echo "| Registry | Tags |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|----------|------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| GHCR | \`${{ steps.meta-ghcr.outputs.tags }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${{ env.HAS_DOCKERHUB_TOKEN }}" == "true" && "${{ env.HAS_DOCKERHUB_USERNAME }}" == "true" ]]; then
+            echo "| Docker Hub | \`${{ steps.meta-dockerhub.outputs.tags }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| Docker Hub | 未配置 (缺少 DOCKERHUB_TOKEN / DOCKERHUB_USERNAME secret) |" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> 触发方式: ${{ github.event_name }}" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "${{ inputs.release_tag }}" ]]; then
+            echo "> 版本号: ${{ inputs.release_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
