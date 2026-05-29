@@ -6,6 +6,7 @@ import RunList from './pages/RunList';
 import RunDetail from './pages/RunDetail';
 import Evaluate from './pages/Evaluate';
 import Strategies from './pages/Strategies';
+import Schedule from './pages/Schedule';
 import Settings from './pages/Settings';
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/runs/:runId" element={<RunDetail />} />
         <Route path="/evaluate/:runId" element={<Evaluate />} />
         <Route path="/strategies" element={<Strategies />} />
+        <Route path="/schedule" element={<Schedule />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
     </Routes>

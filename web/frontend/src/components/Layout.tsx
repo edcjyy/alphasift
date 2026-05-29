@@ -6,6 +6,7 @@ import {
   Layers,
   Settings as SettingsIcon,
   Activity,
+  Clock,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { apiGet } from '@/api';
@@ -16,6 +17,7 @@ const navItems = [
   { to: '/screen', label: '选股', icon: Search },
   { to: '/runs', label: '运行记录', icon: History },
   { to: '/strategies', label: '策略管理', icon: Layers },
+  { to: '/schedule', label: '定时任务', icon: Clock },
   { to: '/settings', label: '设置', icon: SettingsIcon },
 ];
 
