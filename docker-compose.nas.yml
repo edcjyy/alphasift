@@ -1,0 +1,40 @@
+# AlphaSift WebUI — NAS Docker Compose 部署配置
+#
+# 使用方式:
+#   docker compose -f docker-compose.nas.yml up -d --build
+#
+# 前提条件:
+#   1. 飞牛 NAS 已安装 Docker
+#   2. DSA 服务已在 NAS 上运行（端口 8000 或其他）
+#   3. .env 文件包含 LLM API Key 和 Tushare Token
+
+services:
+  alphasift:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    container_name: alphasift
+    restart: unless-stopped
+    ports:
+      - "${ALPHASIFT_PORT:-8080}:8080"
+    volumes:
+      - alphasift-data:/app/data
+      - ./.env:/app/.env:ro
+    environment:
+      - ALPHASIFT_DATA_DIR=/app/data
+      # DSA 联动：使用 host 网络模式访问宿主机上的 DSA
+      - DSA_API_URL=${DSA_API_URL:-http://host.docker.internal:8000}
+    # host 网络模式，可直接访问 NAS 上的其他服务
+    network_mode: host
+    mem_limit: 1024m
+    mem_reservation: 512m
+    cpus: 2
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+volumes:
+  alphasift-data:
+    driver: local

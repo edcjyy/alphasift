@@ -8,3 +8,6 @@ data/
 *.log
 .venv/
 local/.vs/
+web/static/
+web/frontend/node_modules/
+web/frontend/package-lock.json
