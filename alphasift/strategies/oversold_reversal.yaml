@@ -60,7 +60,6 @@ screening:
         change_pct_min: 1.50
       factor_mult:
         reversal: 0.60
-        momentum: 1.30
       risk_mult:
         breakdown_change_pct: 0.85
     bearish:

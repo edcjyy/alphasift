@@ -56,7 +56,6 @@ screening:
         pe_ttm_max: 1.15
       factor_mult:
         value: 0.85
-        momentum: 1.40
         quality: 1.10
       risk_mult:
         chase_change_pct: 1.20

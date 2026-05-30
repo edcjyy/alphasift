@@ -199,7 +199,7 @@ def assess_pick_risk(
         deep_bear_signals += 1
     if pick.rsi_status == "oversold" or (pick.rsi14 is not None and pick.rsi14 < 40.0):
         deep_bear_signals += 1
-    if not pick.price_above_ma20:
+    if pick.price_above_ma20 is False:
         deep_bear_signals += 1
     if pick.change_60d is not None and pick.change_60d < -20:
         deep_bear_signals += 1

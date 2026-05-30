@@ -75,7 +75,6 @@ screening:
       factor_mult:
         momentum: 0.80
         stability: 1.30
-        quality: 1.15
       risk_mult:
         chase_change_pct: 0.75
         abnormal_volume_ratio: 0.80

@@ -62,7 +62,6 @@ screening:
         pe_ttm_max: 1.10
       factor_mult:
         value: 0.90
-        momentum: 1.15
         quality: 1.05
     bearish:
       description: "熊市防御——强化价值+稳定，收紧估值上限"
