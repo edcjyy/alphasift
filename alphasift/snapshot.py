@@ -396,6 +396,17 @@ def _normalize(df: pd.DataFrame, source: str) -> pd.DataFrame:
         df = df.dropna(subset=["price"])
         df = df[df["price"] > 0]
 
+    # Warn if standard columns are missing after normalization (e.g. akshare
+    # version upgrade changes column names silently).
+    _expected_standard = {"code", "name", "price", "change_pct", "amount"}
+    _missing = _expected_standard - set(df.columns)
+    if _missing:
+        logger.warning(
+            "Snapshot source %s missing standard columns after normalization: %s. "
+            "This may indicate a data-source schema change.",
+            source, ",".join(sorted(_missing)),
+        )
+
     df.attrs["snapshot_source"] = source
     return df
 

@@ -173,6 +173,22 @@ def _classify_regime(state: MarketState) -> None:
         adjustments["reversal_weight_mult"] = 1.10
         adjustments["theme_heat_weight_mult"] = 0.70
         state.notes.append("Bearish regime: favoring value/stability/quality/reversal")
+    elif below_ma20 and not breadth_weak:
+        # Weakening: index below MA20 but market breadth is still acceptable.
+        # This is the transitional state before a full bear market — apply
+        # 50%-intensity defensive adjustments to capture the index breakdown
+        # signal without over-reacting.
+        state.regime = "weakening"
+        adjustments["momentum_weight_mult"] = 0.80
+        adjustments["activity_weight_mult"] = 0.85
+        adjustments["value_weight_mult"] = 1.20
+        adjustments["stability_weight_mult"] = 1.15
+        adjustments["quality_weight_mult"] = 1.08
+        state.notes.append(
+            f"Weakening regime (50% bearish): index below MA20 "
+            f"({state.index_vs_ma20_pct:+.1f}%) but breadth={state.breadth_ratio:.2f} — "
+            "transitional defense, light value/stability tilt"
+        )
     elif volume_spike and (not above_ma20):
         state.regime = "volatile"
         # Volatile: tighten risk, favor stability

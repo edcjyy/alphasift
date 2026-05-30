@@ -22,6 +22,7 @@ screening:
     price_min: 3
     price_max: 180
     exclude_new_ipo_days: 60
+    change_60d_max: -10.0
   tech_weight: 0.45
   factor_weights:
     reversal: 0.45

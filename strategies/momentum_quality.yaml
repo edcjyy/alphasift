@@ -22,6 +22,8 @@ screening:
     price_min: 4
     price_max: 220
     exclude_new_ipo_days: 60
+    change_60d_min: 5.0
+    change_20d_min: 0.0
   tech_weight: 0.45
   factor_weights:
     momentum: 0.25

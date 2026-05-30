@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 # Allowed regimes (must match those in MarketState.regime + "neutral")
-_VALID_REGIMES = {"bullish", "bearish", "neutral", "volatile", "polarized"}
+_VALID_REGIMES = {"bullish", "bearish", "neutral", "volatile", "polarized", "weakening"}
 
 
 def screen(
@@ -302,6 +302,19 @@ def screen(
 
     # Compute screen_score with optional market-state weight adjustment
     market_state = assess_market_state(snapshot_df=snapshot_df) if config.risk_enabled else None
+    # Log if the two assess_market_state calls produced different regimes.
+    # The first call (line ~118, without snapshot breadth) drives filter_mult;
+    # this second call (with snapshot breadth) drives factor/risk/scorecard
+    # adjustments. A divergence means filter and factor overrides come from
+    # different regimes — flag it for diagnostics.
+    if config.risk_enabled and regime_state and market_state:
+        if regime_state.regime != market_state.regime:
+            degradation.append(
+                f"Regime divergence: filter regime={regime_state.regime} "
+                f"(no snapshot breadth) vs factor regime={market_state.regime} "
+                f"(with snapshot breadth={market_state.breadth_ratio:.2f}). "
+                f"Filter adjustments may not match factor regime."
+            )
     ms_weights = None
     if market_state and market_state.regime != "neutral":
         degradation.append(
