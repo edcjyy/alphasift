@@ -51,6 +51,25 @@ def _update_progress(task_id: str, stage: str, message: str = "", pct: int = 0):
         }
 
 
+async def _run_dsa_background(run_id: str, data_dir: str):
+    """后台异步执行 DSA 深度分析，不阻塞 screen HTTP 响应。"""
+    try:
+        from alphasift.config import Config
+        from alphasift.dsa import run_dsa_analysis
+        from alphasift.store import load_screen_result, save_screen_result
+
+        config = Config.from_env()
+        logger.info("Background DSA starting: run_id=%s", run_id)
+
+        screen_result = load_screen_result(run_id, data_dir=data_dir)
+        updated = run_dsa_analysis(screen_result, config=config)
+        save_screen_result(updated, data_dir=data_dir)
+
+        logger.info("Background DSA complete: run_id=%s picks=%d", run_id, len(updated.picks))
+    except Exception as e:
+        logger.error("Background DSA failed: run_id=%s error=%s", run_id, e)
+
+
 # ---------------------------------------------------------------------------
 # POST /screen — 运行选股（带进度追踪）
 # ---------------------------------------------------------------------------
@@ -71,6 +90,11 @@ async def run_screen(
     _update_progress(task_id, "init", "准备开始选股...", 0)
     logger.info("选股请求: strategy=%s task=%s", req.strategy, task_id)
 
+    # 分离 DSA 后置分析：先跑完选股，DSA 放在后台异步执行
+    # DSA 单次调用 ~3 分钟，同步等待会导致 HTTP 超时
+    has_dsa = "dsa" in (req.post_analyzers or []) or req.deep_analysis
+    effective_post = [a for a in (req.post_analyzers or []) if a != "dsa"] if req.post_analyzers else None
+
     def _run_with_progress():
         try:
             _update_progress(task_id, "loading_strategy", f"加载策略 {req.strategy}...", 5)
@@ -82,7 +106,7 @@ async def run_screen(
                 max_output=req.max_output,
                 use_llm=req.use_llm,
                 daily_enrich=req.daily_enrich,
-                post_analyzers=req.post_analyzers,
+                post_analyzers=effective_post,
                 config=config,
                 llm_context=req.context,
                 llm_context_files=req.context_files,
@@ -90,20 +114,14 @@ async def run_screen(
                 collect_llm_candidate_context=req.collect_candidate_context,
                 candidate_context_max_candidates=req.candidate_context_max_candidates,
                 candidate_context_providers=req.candidate_context_providers,
-                deep_analysis=req.deep_analysis,
+                deep_analysis=False,  # DSA 单独后台跑
             )
 
-            _update_progress(task_id, "scoring", "计算因子评分...", 60)
             after_filter = result.after_filter_count
-
-            if req.use_llm:
-                _update_progress(task_id, "llm_ranking", "LLM 智能排序中...", 75)
-
-            _update_progress(task_id, "post_analysis", "后置分析...", 90)
 
             # save_run
             if req.save_run:
-                _update_progress(task_id, "saving", "保存选股结果...", 95)
+                _update_progress(task_id, "saving", "保存选股结果...", 90)
                 from alphasift.store import save_screen_result
                 try:
                     save_screen_result(result, data_dir=config.data_dir)
@@ -123,6 +141,16 @@ async def run_screen(
     except Exception as e:
         _update_progress(task_id, "error", str(e)[:100], 0)
         raise HTTPException(status_code=500, detail=str(e))
+
+    # DSA 深度分析：在后台异步执行，不阻塞 HTTP 响应
+    if has_dsa and result.picks:
+        run_id = result.run_id
+        logger.info("调度后台 DSA 深度分析: run_id=%s picks=%d", run_id, len(result.picks))
+        background_tasks.add_task(
+            _run_dsa_background,
+            run_id=run_id,
+            data_dir=config.data_dir,
+        )
 
     result_dict = asdict(result)
     run_id = result_dict.get("run_id")

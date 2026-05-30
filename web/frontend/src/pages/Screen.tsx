@@ -189,6 +189,11 @@ export default function Screen() {
             <span className="inline-block w-1.5 h-1.5 bg-accent rounded-full animate-pulse" />
             正在处理中，请耐心等待...（通常需要 30-120 秒）
           </p>
+          {deepAnalysis && (
+            <p className="text-xs text-amber-400/80">
+              DSA 深度分析将在后台异步执行，不阻塞本页面。完成时间取决于 DSA 服务响应速度。
+            </p>
+          )}
         </div>
       )}
 
