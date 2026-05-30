@@ -202,35 +202,6 @@ def _scoring_profile(config: ScreeningConfig) -> dict[str, float]:
     return profile
 
 
-def _compute_snapshot_score(df: pd.DataFrame) -> pd.Series:
-    """Score based on snapshot fundamentals (0-100).
-
-    Components:
-    - PE ratio: lower is better (for value), normalized
-    - PB ratio: lower is better, normalized
-    - Turnover rate: moderate is best
-    - Amount (liquidity): higher is better, log-scaled
-    - Change pct: near zero or moderate positive preferred
-    """
-    factors = _compute_factor_scores(df)
-    return (
-        factors["value"] * 0.50
-        + factors["liquidity"] * 0.25
-        + factors["stability"] * 0.25
-    ).clip(0, 100)
-
-
-def _compute_tech_score(df: pd.DataFrame) -> pd.Series:
-    """Score based on technical features (0-100).
-
-    Uses available columns like volume_ratio, change_pct patterns.
-    Full tech scoring (MA structure, MACD/RSI) needs daily data,
-    which is not in the snapshot — scored conservatively here.
-    """
-    factors = _compute_factor_scores(df)
-    return (factors["momentum"] * 0.55 + factors["activity"] * 0.45).clip(0, 100)
-
-
 def _compute_value_score(df: pd.DataFrame, profile: dict[str, float] | None = None) -> pd.Series:
     profile = profile or {}
     sector_neutral = bool(profile.get("value_sector_neutral", False))

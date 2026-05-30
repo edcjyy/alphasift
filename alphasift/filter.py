@@ -103,9 +103,15 @@ def apply_hard_filters(df: pd.DataFrame, filters: HardFilterConfig) -> pd.DataFr
     if filters.exclude_new_ipo_days is not None and filters.exclude_new_ipo_days > 0:
         _filter_ipo_age(result, filters.exclude_new_ipo_days)
 
-    # Data quality filter
+    # Data quality filter — column is pre-computed by pipeline before filtering.
+    # Defensive: skip silently if the column is still missing (e.g. snapshot source
+    # does not support it), letting the pipeline continue without this filter.
     if filters.data_quality_min is not None:
-        _filter_min(result, ["data_quality_score"], float(filters.data_quality_min))
+        col = _find_col(result, ["data_quality_score"])
+        if col:
+            _filter_min(result, ["data_quality_score"], float(filters.data_quality_min))
+        else:
+            logger.info("data_quality_min filter skipped: data_quality_score column not available")
 
     return result
 
