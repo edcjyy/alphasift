@@ -90,6 +90,7 @@ async def run_screen(
                 collect_llm_candidate_context=req.collect_candidate_context,
                 candidate_context_max_candidates=req.candidate_context_max_candidates,
                 candidate_context_providers=req.candidate_context_providers,
+                deep_analysis=req.deep_analysis,
             )
 
             _update_progress(task_id, "scoring", "计算因子评分...", 60)

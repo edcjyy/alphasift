@@ -27,6 +27,7 @@ class ScreenRequest(BaseModel):
     candidate_context_providers: list[str] | None = Field(default=None, description="候选上下文数据源")
     candidate_context_news_limit: int = Field(default=3, ge=0, description="每只候选股新闻条数上限")
     candidate_context_announcement_limit: int = Field(default=3, ge=0, description="每只候选股公告条数上限")
+    deep_analysis: bool = Field(default=False, description="是否启用 DSA 深度后置分析")
 
 
 class ScreenResponse(BaseModel):

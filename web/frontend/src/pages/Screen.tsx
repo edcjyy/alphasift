@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Play, Loader2, AlertCircle, StopCircle } from 'lucide-react';
 import { useScreenStore, getStageLabel } from '@/stores/screenStore';
 import { apiGet } from '@/api';
 import type { StrategySummary } from '@/types';
@@ -13,6 +13,7 @@ export default function Screen() {
   const [useLlm, setUseLlm] = useState(false);
   const [dailyEnrich, setDailyEnrich] = useState(false);
   const [saveRun, setSaveRun] = useState(true);
+  const [deepAnalysis, setDeepAnalysis] = useState(false);
 
   const { isScreening, currentResult, error, startScreen, clearResult } =
     useScreenStore();
@@ -42,6 +43,7 @@ export default function Screen() {
       use_llm: useLlm,
       daily_enrich: dailyEnrich,
       save_run: saveRun,
+      deep_analysis: deepAnalysis,
     });
   };
 
@@ -111,6 +113,15 @@ export default function Screen() {
             />
             保存运行
           </label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={deepAnalysis}
+              onChange={(e) => setDeepAnalysis(e.target.checked)}
+              className="accent-accent w-4 h-4"
+            />
+            DSA 深度分析
+          </label>
         </div>
 
         {/* 操作按钮 */}
@@ -148,9 +159,18 @@ export default function Screen() {
       {/* 选股进度 */}
       {isScreening && (
         <div className="bg-surface rounded-xl border border-border p-5 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Loader2 className="w-4 h-4 animate-spin text-accent" />
-            选股进行中...
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Loader2 className="w-4 h-4 animate-spin text-accent" />
+              选股进行中...
+            </div>
+            <button
+              onClick={clearResult}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium transition-colors"
+            >
+              <StopCircle className="w-3.5 h-3.5" />
+              中止选股
+            </button>
           </div>
           <div className="bg-gray-900 rounded-full h-2.5 overflow-hidden">
             <div

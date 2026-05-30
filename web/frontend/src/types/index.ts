@@ -120,6 +120,7 @@ export interface ScreenParams {
   daily_enrich?: boolean;
   post_analyzers?: string[];
   save_run?: boolean;
+  deep_analysis?: boolean;
   explain?: boolean;
   context?: string;
 }
