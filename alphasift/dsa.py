@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Callable
 from urllib.parse import urlparse
 
 import requests
@@ -42,8 +43,15 @@ def analyze_picks_with_dsa(
     timeout_sec: float = 120.0,
     force_refresh: bool = False,
     notify: bool = False,
+    on_pick_complete: Callable[[Pick], None] | None = None,
 ) -> tuple[list[Pick], list[str]]:
-    """Run DSA deep analysis for the top picks and attach results in place."""
+    """Run DSA deep analysis for the top picks and attach results in place.
+
+    Supports resume: picks with ``deep_analysis_status == "completed"`` are
+    skipped.  When *on_pick_complete* is provided it is called after every
+    single-stock analysis (success *and* failure), so callers can persist
+    incremental progress.
+    """
     if not api_url:
         raise ValueError("DSA_API_URL is required when deep_analysis=True")
     if max_picks <= 0:
@@ -56,6 +64,10 @@ def analyze_picks_with_dsa(
     for idx, pick in enumerate(picks):
         if idx >= analyze_count:
             pick.deep_analysis_status = "skipped"
+            continue
+
+        if pick.deep_analysis_status == "completed":
+            logger.debug("DSA resume skip (already completed): %s rank=%d", pick.code, pick.rank)
             continue
 
         try:
@@ -79,6 +91,12 @@ def analyze_picks_with_dsa(
             pick.deep_analysis_status = "failed"
             pick.deep_analysis_error = str(exc)
             degradation.append(f"DSA deep analysis failed for {pick.code}: {exc}")
+        finally:
+            if on_pick_complete is not None:
+                try:
+                    on_pick_complete(pick)
+                except Exception as cb_exc:
+                    logger.warning("on_pick_complete failed for %s: %s", pick.code, cb_exc)
 
     return picks, degradation
 

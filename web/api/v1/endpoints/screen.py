@@ -51,30 +51,66 @@ def _update_progress(task_id: str, stage: str, message: str = "", pct: int = 0):
         }
 
 
-async def _run_dsa_background(run_id: str, data_dir: str):
-    """后台异步执行 DSA 深度分析，不阻塞 screen HTTP 响应。"""
+def _run_dsa_background(run_id: str, data_dir: str):
+    """后台同步执行 DSA 深度分析（由 BackgroundTasks 在线程池中运行，不阻塞事件循环）。
+
+    支持断点续传：每完成一只股票就增量保存，下次重启自动跳过已完成的。
+    """
     try:
         from alphasift.config import Config
         from alphasift.dsa import analyze_picks_with_dsa, apply_dsa_overlay
         from alphasift.store import load_screen_result, save_screen_result
 
         config = Config.from_env()
-        logger.info("Background DSA starting: run_id=%s", run_id)
 
         screen_result = load_screen_result(run_id, data_dir=data_dir)
+        already_completed = sum(
+            1 for p in screen_result.picks
+            if getattr(p, "deep_analysis_status", None) == "completed"
+        )
+        if already_completed > 0:
+            logger.info(
+                "Background DSA resume: run_id=%s already_completed=%d total=%d",
+                run_id, already_completed, len(screen_result.picks),
+            )
+        else:
+            logger.info("Background DSA starting: run_id=%s", run_id)
+
+        def _save_increment(_pick):
+            """增量保存：每完成/失败一只股票立即持久化，防止中断丢失进度。"""
+            screen_result.picks = picks
+            screen_result.degradation = list(dict.fromkeys(
+                screen_result.degradation + notes
+            ))
+            try:
+                save_screen_result(screen_result, data_dir=data_dir)
+            except Exception as save_exc:
+                logger.warning("Incremental save failed (non-fatal): %s", save_exc)
+
+        picks = screen_result.picks
+        notes: list[str] = []
         picks, notes = analyze_picks_with_dsa(
-            screen_result.picks,
+            picks,
             run_id=run_id,
             api_url=config.dsa_api_url,
             timeout_sec=config.dsa_timeout_sec,
             max_picks=config.dsa_max_picks,
+            on_pick_complete=_save_increment,
         )
         picks = apply_dsa_overlay(picks)
         screen_result.picks = picks
-        screen_result.degradation.extend(notes)
+        screen_result.degradation = list(dict.fromkeys(
+            screen_result.degradation + notes
+        ))
         save_screen_result(screen_result, data_dir=data_dir)
 
-        logger.info("Background DSA complete: run_id=%s picks=%d", run_id, len(picks))
+        completed_count = sum(
+            1 for p in picks if getattr(p, "deep_analysis_status", None) == "completed"
+        )
+        logger.info(
+            "Background DSA complete: run_id=%s picks=%d completed=%d",
+            run_id, len(picks), completed_count,
+        )
     except Exception as e:
         logger.error("Background DSA failed: run_id=%s error=%s", run_id, e)
 
