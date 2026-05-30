@@ -213,6 +213,7 @@ def _parse_env_content(text: str) -> tuple[list[tuple[int, str]], dict[str, str]
 async def get_env():
     """读取白名单内的环境变量（敏感值脱敏）。"""
     import os
+    from pathlib import Path
 
     result: list[EnvEntry] = []
 
@@ -226,7 +227,7 @@ async def get_env():
     env_path = _find_env_file()
     if env_path:
         try:
-            text = open(env_path, encoding="utf-8").read()
+            text = Path(env_path).read_text(encoding="utf-8")
             _, file_values = _parse_env_content(text)
             for entry in result:
                 if entry.key in file_values and not os.environ.get(entry.key):

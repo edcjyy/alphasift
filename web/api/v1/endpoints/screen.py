@@ -69,12 +69,12 @@ async def _run_dsa_background(run_id: str, data_dir: str):
             timeout_sec=config.dsa_timeout_sec,
             max_picks=config.dsa_max_picks,
         )
-        picks, _ = apply_dsa_overlay(picks)
+        picks = apply_dsa_overlay(picks)
         screen_result.picks = picks
         screen_result.degradation.extend(notes)
         save_screen_result(screen_result, data_dir=data_dir)
 
-        logger.info("Background DSA complete: run_id=%s picks=%d", run_id, len(updated.picks))
+        logger.info("Background DSA complete: run_id=%s picks=%d", run_id, len(picks))
     except Exception as e:
         logger.error("Background DSA failed: run_id=%s error=%s", run_id, e)
 
