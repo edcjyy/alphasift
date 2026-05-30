@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Resumable pipeline checkpoints — lightweight persistence between stages.
 
-Each screen() run saves intermediate DataFrames as Parquet files under
+Each screen() run saves intermediate DataFrames as pickle files under
 ``{ALPHASIFT_DATA_DIR}/checkpoints/{run_id}/``.  On restart, the pipeline
 reads the newest valid checkpoint and skips already-completed stages.
 
@@ -87,8 +87,8 @@ def save_checkpoint(
     cp_dir.mkdir(parents=True, exist_ok=True)
 
     # DataFrame → Parquet
-    parquet_path = cp_dir / f"{stage}.parquet"
-    df.to_parquet(parquet_path, index=False)
+    pkl_path = cp_dir / f"{stage}.pkl"
+    df.to_pickle(pkl_path)
 
     # Metadata → JSON
     meta = CheckpointMeta(
@@ -105,8 +105,8 @@ def save_checkpoint(
     meta_path = cp_dir / f"{stage}.json"
     meta_path.write_text(json.dumps(asdict(meta), indent=2, ensure_ascii=False), encoding="utf-8")
 
-    logger.info("Checkpoint saved: stage=%s rows=%d path=%s", stage, len(df), parquet_path)
-    return parquet_path
+    logger.info("Checkpoint saved: stage=%s rows=%d path=%s", stage, len(df), pkl_path)
+    return pkl_path
 
 
 def load_checkpoint(
@@ -120,10 +120,10 @@ def load_checkpoint(
 ) -> pd.DataFrame | None:
     """Load a valid checkpoint, or return None if missing/stale/incompatible."""
     cp_dir = _checkpoint_dir(run_id, data_dir)
-    parquet_path = cp_dir / f"{stage}.parquet"
+    pkl_path = cp_dir / f"{stage}.pkl"
     meta_path = cp_dir / f"{stage}.json"
 
-    if not parquet_path.exists() or not meta_path.exists():
+    if not pkl_path.exists() or not meta_path.exists():
         return None
 
     # Load and validate metadata
@@ -139,7 +139,7 @@ def load_checkpoint(
         logger.info("Checkpoint %s invalid: %s", stage, reason)
         return None
 
-    df = pd.read_parquet(parquet_path)
+    df = pd.read_pickle(pkl_path)
     # Carry forward snapshot attrs
     if snapshot_source and "snapshot_source" not in df.attrs:
         df.attrs["snapshot_source"] = snapshot_source
