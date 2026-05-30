@@ -200,256 +200,256 @@ def screen(
     snapshot_filters = without_daily_filters(screening.hard_filters) if daily_needed else screening.hard_filters
 
     if not skip_data_stages:
-        # 2. Fetch snapshot
-    snapshot_df = fetch_snapshot_with_fallback(
-        config.snapshot_source_priority,
-        required_columns=_required_snapshot_columns(snapshot_filters),
-    )
-    effective_industry_map_files = (
-        list(industry_map_files)
-        if industry_map_files is not None
-        else list(config.industry_map_files)
-    )
-    effective_industry_provider = (
-        industry_provider
-        if industry_provider is not None
-        else config.industry_provider
-    )
-    effective_industry_provider = str(effective_industry_provider or "none").strip().lower()
-    if effective_industry_map_files or effective_industry_provider not in {"", "none", "off", "false"}:
-        snapshot_df, industry_notes = enrich_industry_concepts(
-            snapshot_df,
-            map_files=effective_industry_map_files,
-            provider=effective_industry_provider,
-            max_boards=config.industry_provider_max_boards,
+            # 2. Fetch snapshot
+        snapshot_df = fetch_snapshot_with_fallback(
+            config.snapshot_source_priority,
+            required_columns=_required_snapshot_columns(snapshot_filters),
         )
-        degradation.extend(f"Industry/concepts enrichment: {item}" for item in industry_notes)
-    snapshot_count = len(snapshot_df)
-    snapshot_source = str(snapshot_df.attrs.get("snapshot_source", ""))
-    source_errors = [str(item) for item in snapshot_df.attrs.get("source_errors", [])]
-    degradation.extend(f"Snapshot source fallback: {item}" for item in source_errors)
+        effective_industry_map_files = (
+            list(industry_map_files)
+            if industry_map_files is not None
+            else list(config.industry_map_files)
+        )
+        effective_industry_provider = (
+            industry_provider
+            if industry_provider is not None
+            else config.industry_provider
+        )
+        effective_industry_provider = str(effective_industry_provider or "none").strip().lower()
+        if effective_industry_map_files or effective_industry_provider not in {"", "none", "off", "false"}:
+            snapshot_df, industry_notes = enrich_industry_concepts(
+                snapshot_df,
+                map_files=effective_industry_map_files,
+                provider=effective_industry_provider,
+                max_boards=config.industry_provider_max_boards,
+            )
+            degradation.extend(f"Industry/concepts enrichment: {item}" for item in industry_notes)
+        snapshot_count = len(snapshot_df)
+        snapshot_source = str(snapshot_df.attrs.get("snapshot_source", ""))
+        source_errors = [str(item) for item in snapshot_df.attrs.get("source_errors", [])]
+        degradation.extend(f"Snapshot source fallback: {item}" for item in source_errors)
 
-    # Attach trade date for checkpoint validity and save snapshot checkpoint
-    from datetime import date as _date, datetime as _dt
-    _now = _dt.now()
-    _td = _date.today()
-    while _td.weekday() >= 5:
-        _td = _td - __import__("datetime").timedelta(days=1)
-    if _td == _date.today() and _now.hour < 16:
-        _td = _td - __import__("datetime").timedelta(days=1)
+        # Attach trade date for checkpoint validity and save snapshot checkpoint
+        from datetime import date as _date, datetime as _dt
+        _now = _dt.now()
+        _td = _date.today()
         while _td.weekday() >= 5:
             _td = _td - __import__("datetime").timedelta(days=1)
-    snapshot_df.attrs["trade_date"] = _td.isoformat()
-    save_checkpoint(
-        snapshot_df, stage="01_snapshot", run_id=run_id,
-        strategy=strategy, data_dir=config.data_dir,
-        strategies_dir=config.strategies_dir,
-        snapshot_source=snapshot_source,
-    )
-
-    # 2.5 Compute data quality score on snapshot before hard filtering,
-    # so data_quality_min filter has a column to work with.
-    snapshot_df["data_quality_score"] = _compute_data_quality(snapshot_df)
-
-    # 3. L1 hard filter. If a strategy needs daily features, first apply only
-    # snapshot-safe filters, then enrich a narrowed candidate pool.
-    df = apply_hard_filters(snapshot_df, snapshot_filters)
-    after_filter_count = len(df)
-    # Carry over trade_date for checkpoint validation
-    df.attrs["trade_date"] = snapshot_df.attrs.get("trade_date", "")
-    save_checkpoint(
-        df, stage="02_filtered", run_id=run_id,
-        strategy=strategy, data_dir=config.data_dir,
-        strategies_dir=config.strategies_dir,
-        snapshot_source=snapshot_source,
-    )
-
-    if df.empty:
-        return ScreenResult(
-            strategy=strategy,
-            market=market,
-            snapshot_count=snapshot_count,
-            after_filter_count=0,
-            run_id=run_id,
-            degradation=[*degradation, "No candidates after hard filter"],
-            snapshot_source=snapshot_source,
-            source_errors=source_errors,
-            strategy_version=strat.version,
-            strategy_category=strat.category,
-            post_analyzers=analyzer_names,
-            daily_enriched=False,
-            risk_enabled=config.risk_enabled,
-            portfolio_diversity_enabled=config.portfolio_diversity_enabled,
-        )
-
-    daily_enriched = False
-    daily_enrich_count = 0
-    if daily_needed or daily_requested:
-        provisional = compute_screen_scores(df, screening).sort_values("screen_score", ascending=False)
-        enrich_count = min(daily_limit, len(provisional))
-        daily_candidates = provisional.head(enrich_count)
-        try:
-            enriched = enrich_daily_features(
-                daily_candidates,
-                max_rows=enrich_count,
-                lookback_days=config.daily_lookback_days,
-                source=config.daily_source,
-                fetch_retries=config.daily_fetch_retries,
-            )
-            daily_enriched = True
-            daily_errors = [str(item) for item in enriched.attrs.get("daily_errors", [])]
-            daily_enrich_count = int(enriched.attrs.get("daily_success_count", len(enriched)))
-            degradation.append(
-                f"Daily K-line enrichment attempted {enrich_count} candidates, "
-                f"succeeded {daily_enrich_count} of {after_filter_count} snapshot-filtered candidates"
-            )
-            if daily_errors:
-                sample = " | ".join(daily_errors[:5])
-                suffix = f" | +{len(daily_errors) - 5} more" if len(daily_errors) > 5 else ""
-                degradation.append(f"Daily K-line enrichment row errors: {sample}{suffix}")
-            if daily_needed:
-                df = apply_hard_filters(enriched, screening.hard_filters)
-                after_filter_count = len(df)
-            else:
-                df = enriched
-        except Exception as exc:
-            if daily_needed:
-                raise RuntimeError(
-                    "Daily K-line enrichment is required by this strategy but failed: "
-                    f"{exc}"
-                ) from exc
-            degradation.append(f"Daily K-line enrichment skipped: {exc}")
-
-    if not df.empty and (daily_needed or daily_requested):
+        if _td == _date.today() and _now.hour < 16:
+            _td = _td - __import__("datetime").timedelta(days=1)
+            while _td.weekday() >= 5:
+                _td = _td - __import__("datetime").timedelta(days=1)
+        snapshot_df.attrs["trade_date"] = _td.isoformat()
         save_checkpoint(
-            df, stage="03_daily", run_id=run_id,
+            snapshot_df, stage="01_snapshot", run_id=run_id,
             strategy=strategy, data_dir=config.data_dir,
             strategies_dir=config.strategies_dir,
             snapshot_source=snapshot_source,
         )
 
-    if df.empty:
-        return ScreenResult(
-            strategy=strategy,
-            market=market,
-            strategy_version=strat.version,
-            strategy_category=strat.category,
-            snapshot_count=snapshot_count,
-            after_filter_count=0,
-            run_id=run_id,
-            degradation=[*degradation, "No candidates after daily hard filter"],
+        # 2.5 Compute data quality score on snapshot before hard filtering,
+        # so data_quality_min filter has a column to work with.
+        snapshot_df["data_quality_score"] = _compute_data_quality(snapshot_df)
+
+        # 3. L1 hard filter. If a strategy needs daily features, first apply only
+        # snapshot-safe filters, then enrich a narrowed candidate pool.
+        df = apply_hard_filters(snapshot_df, snapshot_filters)
+        after_filter_count = len(df)
+        # Carry over trade_date for checkpoint validation
+        df.attrs["trade_date"] = snapshot_df.attrs.get("trade_date", "")
+        save_checkpoint(
+            df, stage="02_filtered", run_id=run_id,
+            strategy=strategy, data_dir=config.data_dir,
+            strategies_dir=config.strategies_dir,
             snapshot_source=snapshot_source,
-            source_errors=source_errors,
-            post_analyzers=analyzer_names,
-            daily_enriched=daily_enriched,
-            daily_enrich_count=daily_enrich_count,
-            risk_enabled=config.risk_enabled,
-            portfolio_diversity_enabled=config.portfolio_diversity_enabled,
         )
 
-    # 3.5 Enrich ROE for quality factor scoring.
-    # Uses snapshot PE/PB (already present) for fast local computation;
-    # skips fina_indicator API which may be unreliable at the 15000-credit tier.
-    df = enrich_roe(df, force_tushare_fallback=True)
-    roe_count = (df.get("roe", pd.Series(dtype=float)).notna()).sum()
-    save_checkpoint(
-        df, stage="04_roe", run_id=run_id,
-        strategy=strategy, data_dir=config.data_dir,
-        strategies_dir=config.strategies_dir,
-        snapshot_source=snapshot_source,
-    )
-    if roe_count > 0:
-        degradation.append(
-            f"ROE enriched: {roe_count}/{len(df)} candidates "
-            f"(source: {(df.get('roe_source') == 'daily_basic_est').sum()} daily_basic_est, "
-            f"{(df.get('roe_source') == 'snapshot_est').sum()} snapshot_est)"
-        )
-
-    # Compute screen_score with optional market-state weight adjustment
-    market_state = assess_market_state(snapshot_df=snapshot_df) if config.risk_enabled else None
-    # Log if the two assess_market_state calls produced different regimes.
-    # The first call (line ~118, without snapshot breadth) drives filter_mult;
-    # this second call (with snapshot breadth) drives factor/risk/scorecard
-    # adjustments. A divergence means filter and factor overrides come from
-    # different regimes — flag it for diagnostics.
-    if config.risk_enabled and regime_state and market_state:
-        if regime_state.regime != market_state.regime:
-            degradation.append(
-                f"Regime divergence: filter regime={regime_state.regime} "
-                f"(no snapshot breadth) vs factor regime={market_state.regime} "
-                f"(with snapshot breadth={market_state.breadth_ratio:.2f}). "
-                f"Filter adjustments may not match factor regime."
+        if df.empty:
+            return ScreenResult(
+                strategy=strategy,
+                market=market,
+                snapshot_count=snapshot_count,
+                after_filter_count=0,
+                run_id=run_id,
+                degradation=[*degradation, "No candidates after hard filter"],
+                snapshot_source=snapshot_source,
+                source_errors=source_errors,
+                strategy_version=strat.version,
+                strategy_category=strat.category,
+                post_analyzers=analyzer_names,
+                daily_enriched=False,
+                risk_enabled=config.risk_enabled,
+                portfolio_diversity_enabled=config.portfolio_diversity_enabled,
             )
-    ms_weights = None
-    if market_state and market_state.regime != "neutral":
-        degradation.append(
-            f"Market state: regime={market_state.regime} "
-            + " | ".join(market_state.notes)
-        )
-        # Apply YAML-based regime overrides (factor_mult, risk_mult, scorecard_mult, tech_weight)
-        # Note: filter_mult was applied early before hard filtering
-        # factor/risk/scorecard adjustments are applied here because they need the
-        # more accurate snapshot-based regime detection (includes market breadth)
-        regime_overrides_applied = screening.regime_weights.get(market_state.regime)
-        if regime_overrides_applied:
-            # Re-apply late-stage overrides (factor/risk/scorecard/tech_weight only)
-            ov = regime_overrides_applied
-            if ov.factor_mult and screening.factor_weights:
-                for fname, mult in ov.factor_mult.items():
-                    if fname in screening.factor_weights:
-                        screening.factor_weights[fname] *= mult
-                total = sum(screening.factor_weights.values())
-                if total > 0:
-                    for k in screening.factor_weights:
-                        screening.factor_weights[k] /= total
-            if ov.risk_mult and screening.risk_profile:
-                for k, mult in ov.risk_mult.items():
-                    if k in screening.risk_profile:
-                        screening.risk_profile[k] *= mult
-            if ov.scorecard_mult and screening.scorecard_profile:
-                for k, mult in ov.scorecard_mult.items():
-                    if k in screening.scorecard_profile:
-                        screening.scorecard_profile[k] *= mult
-            if ov.tech_weight is not None:
-                screening.tech_weight = ov.tech_weight
-            # Use screening's adjusted factor_weights directly (already applied above)
-            # No need for apply_market_state_weights when YAML overrides are present
-            ms_weights = None
-        else:
-            # Fallback: old hardcoded market_state weight adjustments
-            from alphasift.scorer import _FACTOR_COLUMNS as _cols
-            tw = screening.tech_weight
-            base_weights = screening.factor_weights or {
-                "value": (1 - tw) * 0.35,
-                "liquidity": (1 - tw) * 0.15,
-                "stability": (1 - tw) * 0.15,
-                "quality": (1 - tw) * 0.15,
-                "size": (1 - tw) * 0.10,
-                "momentum": tw * 0.40,
-                "activity": tw * 0.35,
-                "reversal": 0.04,
-                "theme_heat": 0.06,
-            }
-            base_weights = {
-                k: max(float(v), 0.0) for k, v in base_weights.items() if k in _cols
-            }
-            total = sum(base_weights.values())
-            if total > 0:
-                base_weights = {k: v / total for k, v in base_weights.items()}
-            ms_weights = apply_market_state_weights(base_weights, market_state)
-        degradation.append(
-            "Market-state adjusted weights: "
-            + ", ".join(f"{k}={v:.3f}" for k, v in (screening.factor_weights or {}).items())
-        )
 
-    df = compute_screen_scores(df, screening, market_state_weights=ms_weights)
-    df = df.sort_values("screen_score", ascending=False)
-    save_checkpoint(
-        df, stage="05_scored", run_id=run_id,
-        strategy=strategy, data_dir=config.data_dir,
-        strategies_dir=config.strategies_dir,
-        snapshot_source=snapshot_source,
-    )
+        daily_enriched = False
+        daily_enrich_count = 0
+        if daily_needed or daily_requested:
+            provisional = compute_screen_scores(df, screening).sort_values("screen_score", ascending=False)
+            enrich_count = min(daily_limit, len(provisional))
+            daily_candidates = provisional.head(enrich_count)
+            try:
+                enriched = enrich_daily_features(
+                    daily_candidates,
+                    max_rows=enrich_count,
+                    lookback_days=config.daily_lookback_days,
+                    source=config.daily_source,
+                    fetch_retries=config.daily_fetch_retries,
+                )
+                daily_enriched = True
+                daily_errors = [str(item) for item in enriched.attrs.get("daily_errors", [])]
+                daily_enrich_count = int(enriched.attrs.get("daily_success_count", len(enriched)))
+                degradation.append(
+                    f"Daily K-line enrichment attempted {enrich_count} candidates, "
+                    f"succeeded {daily_enrich_count} of {after_filter_count} snapshot-filtered candidates"
+                )
+                if daily_errors:
+                    sample = " | ".join(daily_errors[:5])
+                    suffix = f" | +{len(daily_errors) - 5} more" if len(daily_errors) > 5 else ""
+                    degradation.append(f"Daily K-line enrichment row errors: {sample}{suffix}")
+                if daily_needed:
+                    df = apply_hard_filters(enriched, screening.hard_filters)
+                    after_filter_count = len(df)
+                else:
+                    df = enriched
+            except Exception as exc:
+                if daily_needed:
+                    raise RuntimeError(
+                        "Daily K-line enrichment is required by this strategy but failed: "
+                        f"{exc}"
+                    ) from exc
+                degradation.append(f"Daily K-line enrichment skipped: {exc}")
+
+        if not df.empty and (daily_needed or daily_requested):
+            save_checkpoint(
+                df, stage="03_daily", run_id=run_id,
+                strategy=strategy, data_dir=config.data_dir,
+                strategies_dir=config.strategies_dir,
+                snapshot_source=snapshot_source,
+            )
+
+        if df.empty:
+            return ScreenResult(
+                strategy=strategy,
+                market=market,
+                strategy_version=strat.version,
+                strategy_category=strat.category,
+                snapshot_count=snapshot_count,
+                after_filter_count=0,
+                run_id=run_id,
+                degradation=[*degradation, "No candidates after daily hard filter"],
+                snapshot_source=snapshot_source,
+                source_errors=source_errors,
+                post_analyzers=analyzer_names,
+                daily_enriched=daily_enriched,
+                daily_enrich_count=daily_enrich_count,
+                risk_enabled=config.risk_enabled,
+                portfolio_diversity_enabled=config.portfolio_diversity_enabled,
+            )
+
+        # 3.5 Enrich ROE for quality factor scoring.
+        # Uses snapshot PE/PB (already present) for fast local computation;
+        # skips fina_indicator API which may be unreliable at the 15000-credit tier.
+        df = enrich_roe(df, force_tushare_fallback=True)
+        roe_count = (df.get("roe", pd.Series(dtype=float)).notna()).sum()
+        save_checkpoint(
+            df, stage="04_roe", run_id=run_id,
+            strategy=strategy, data_dir=config.data_dir,
+            strategies_dir=config.strategies_dir,
+            snapshot_source=snapshot_source,
+        )
+        if roe_count > 0:
+            degradation.append(
+                f"ROE enriched: {roe_count}/{len(df)} candidates "
+                f"(source: {(df.get('roe_source') == 'daily_basic_est').sum()} daily_basic_est, "
+                f"{(df.get('roe_source') == 'snapshot_est').sum()} snapshot_est)"
+            )
+
+        # Compute screen_score with optional market-state weight adjustment
+        market_state = assess_market_state(snapshot_df=snapshot_df) if config.risk_enabled else None
+        # Log if the two assess_market_state calls produced different regimes.
+        # The first call (line ~118, without snapshot breadth) drives filter_mult;
+        # this second call (with snapshot breadth) drives factor/risk/scorecard
+        # adjustments. A divergence means filter and factor overrides come from
+        # different regimes — flag it for diagnostics.
+        if config.risk_enabled and regime_state and market_state:
+            if regime_state.regime != market_state.regime:
+                degradation.append(
+                    f"Regime divergence: filter regime={regime_state.regime} "
+                    f"(no snapshot breadth) vs factor regime={market_state.regime} "
+                    f"(with snapshot breadth={market_state.breadth_ratio:.2f}). "
+                    f"Filter adjustments may not match factor regime."
+                )
+        ms_weights = None
+        if market_state and market_state.regime != "neutral":
+            degradation.append(
+                f"Market state: regime={market_state.regime} "
+                + " | ".join(market_state.notes)
+            )
+            # Apply YAML-based regime overrides (factor_mult, risk_mult, scorecard_mult, tech_weight)
+            # Note: filter_mult was applied early before hard filtering
+            # factor/risk/scorecard adjustments are applied here because they need the
+            # more accurate snapshot-based regime detection (includes market breadth)
+            regime_overrides_applied = screening.regime_weights.get(market_state.regime)
+            if regime_overrides_applied:
+                # Re-apply late-stage overrides (factor/risk/scorecard/tech_weight only)
+                ov = regime_overrides_applied
+                if ov.factor_mult and screening.factor_weights:
+                    for fname, mult in ov.factor_mult.items():
+                        if fname in screening.factor_weights:
+                            screening.factor_weights[fname] *= mult
+                    total = sum(screening.factor_weights.values())
+                    if total > 0:
+                        for k in screening.factor_weights:
+                            screening.factor_weights[k] /= total
+                if ov.risk_mult and screening.risk_profile:
+                    for k, mult in ov.risk_mult.items():
+                        if k in screening.risk_profile:
+                            screening.risk_profile[k] *= mult
+                if ov.scorecard_mult and screening.scorecard_profile:
+                    for k, mult in ov.scorecard_mult.items():
+                        if k in screening.scorecard_profile:
+                            screening.scorecard_profile[k] *= mult
+                if ov.tech_weight is not None:
+                    screening.tech_weight = ov.tech_weight
+                # Use screening's adjusted factor_weights directly (already applied above)
+                # No need for apply_market_state_weights when YAML overrides are present
+                ms_weights = None
+            else:
+                # Fallback: old hardcoded market_state weight adjustments
+                from alphasift.scorer import _FACTOR_COLUMNS as _cols
+                tw = screening.tech_weight
+                base_weights = screening.factor_weights or {
+                    "value": (1 - tw) * 0.35,
+                    "liquidity": (1 - tw) * 0.15,
+                    "stability": (1 - tw) * 0.15,
+                    "quality": (1 - tw) * 0.15,
+                    "size": (1 - tw) * 0.10,
+                    "momentum": tw * 0.40,
+                    "activity": tw * 0.35,
+                    "reversal": 0.04,
+                    "theme_heat": 0.06,
+                }
+                base_weights = {
+                    k: max(float(v), 0.0) for k, v in base_weights.items() if k in _cols
+                }
+                total = sum(base_weights.values())
+                if total > 0:
+                    base_weights = {k: v / total for k, v in base_weights.items()}
+                ms_weights = apply_market_state_weights(base_weights, market_state)
+            degradation.append(
+                "Market-state adjusted weights: "
+                + ", ".join(f"{k}={v:.3f}" for k, v in (screening.factor_weights or {}).items())
+            )
+
+        df = compute_screen_scores(df, screening, market_state_weights=ms_weights)
+        df = df.sort_values("screen_score", ascending=False)
+        save_checkpoint(
+            df, stage="05_scored", run_id=run_id,
+            strategy=strategy, data_dir=config.data_dir,
+            strategies_dir=config.strategies_dir,
+            snapshot_source=snapshot_source,
+        )
     # ---- End skip_data_stages block ----
 
     # 5. Take Top K for LLM ranking
