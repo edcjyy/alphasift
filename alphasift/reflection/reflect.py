@@ -21,6 +21,7 @@ from alphasift.reflection.analyzer import analyze_evaluation
 from alphasift.reflection.critic import validate_changes
 from alphasift.reflection.experience import (
     get_change_history,
+    get_history,
     save_reflection,
 )
 from alphasift.reflection.models import ReflectionResult

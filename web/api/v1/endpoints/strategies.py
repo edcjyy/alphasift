@@ -131,10 +131,13 @@ async def upload_strategy(file: UploadFile = File(...)):
     if len(content) > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=400, detail=f"文件过大，最大 {MAX_UPLOAD_SIZE // 1024} KB")
 
-    # 统一使用 .yaml 后缀保存
-    dest_name = file.filename
-    if dest_name.endswith(".yml"):
-        dest_name = dest_name[:-4] + ".yaml"
+    # 统一使用 .yaml 后缀保存；消毒文件名防止路径遍历
+    raw_name = file.filename or "uploaded_strategy"
+    # Strip path separators and traversal, keep only safe characters
+    safe_stem = Path(raw_name).name  # drops any directory component
+    safe_stem = safe_stem.rsplit(".", 1)[0] or safe_stem  # strip extension
+    safe_stem = "".join(c for c in safe_stem if c.isalnum() or c in "_-") or "strategy"
+    dest_name = f"{safe_stem}.yaml"
 
     # 校验是否为合法 YAML + 可被 load_strategy 解析
     import yaml

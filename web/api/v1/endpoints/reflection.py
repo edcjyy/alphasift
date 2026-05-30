@@ -204,8 +204,13 @@ async def reflection_sensitivity(strategy: str):
     from alphasift.config import Config
     from alphasift.reflection.sensitivity import analyze_sensitivity
 
+    # Sanitize: reject path traversal and non-alphanumeric strategy names
+    if ".." in strategy or "/" in strategy or "\\" in strategy:
+        raise HTTPException(status_code=400, detail="Invalid strategy name")
+    safe_name = strategy.strip()
+
     config = Config.from_env()
-    strategy_path = config.strategies_dir / f"{strategy}.yaml"
+    strategy_path = config.strategies_dir / f"{safe_name}.yaml"
     if not strategy_path.exists():
         raise HTTPException(status_code=404, detail=f"策略文件不存在: {strategy}.yaml")
 

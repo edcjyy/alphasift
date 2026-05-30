@@ -212,6 +212,12 @@ def _read_context_files(paths: list[str | Path]) -> str:
     chunks: list[str] = []
     for path_like in paths:
         path = Path(path_like)
+        # Reject paths with traversal or absolute components to prevent
+        # arbitrary file read via user-supplied context file paths.
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError(
+                f"Context file path must be relative and must not contain '..': {path}"
+            )
         if not path.is_file():
             raise FileNotFoundError(f"Context file not found: {path}")
         text = path.read_text(encoding="utf-8").strip()

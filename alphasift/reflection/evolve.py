@@ -205,8 +205,26 @@ def evolve_multi_round(
         )
         results.append(result2)
 
-        # Use the new run_id for next round if available
-        if hasattr(result2, '_new_run_id') and result2._new_run_id:
-            current_run_id = result2._new_run_id
+        # After auto-reevaluate, find the latest evaluation run for the
+        # next round.  reflect_on_evaluation creates a new screen/eval run
+        # internally (apply=True + auto_reevaluate=True) but only returns
+        # the ReflectionResult for the *original* run_id, so we scan the
+        # data directory for the most recent run to use in the next round.
+        import uuid as _uuid
+        evals_dir = data_dir / "evaluations"
+        runs_dir = data_dir / "runs"
+        next_run_id = current_run_id
+        try:
+            if evals_dir.is_dir():
+                eval_files = sorted(
+                    evals_dir.glob("*.json"),
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True,
+                )
+                if eval_files:
+                    next_run_id = eval_files[0].stem
+        except Exception:
+            pass  # keep current_run_id on failure
+        current_run_id = next_run_id
 
     return results
