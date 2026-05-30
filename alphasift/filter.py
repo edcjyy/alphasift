@@ -12,6 +12,12 @@ logger = logging.getLogger(__name__)
 _DAILY_FILTER_DEFAULTS = {
     "change_60d_min": None,
     "change_60d_max": None,
+    "change_5d_min": None,
+    "change_5d_max": None,
+    "change_20d_min": None,
+    "change_20d_max": None,
+    "change_120d_min": None,
+    "change_120d_max": None,
     "require_ma_bullish": False,
     "require_price_above_ma20": False,
     "signal_score_min": None,
