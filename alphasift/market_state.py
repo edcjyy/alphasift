@@ -296,7 +296,13 @@ def _fetch_index_history(code: str, *, source: str = "auto") -> pd.DataFrame | N
         try:
             import akshare as ak
 
-            df = ak.stock_zh_index_daily(symbol=f"sh{code.split('.')[0]}")
+            # Resolve the akshare prefix from the Tushare-style code suffix
+            # (e.g. "000300.SH" → sh000300, "399006.SZ" → sz399006).
+            parts = code.split(".")
+            raw_code = parts[0]
+            exchange = parts[1].lower() if len(parts) > 1 else "sh"
+            symbol = f"{exchange}{raw_code}"
+            df = ak.stock_zh_index_daily(symbol=symbol)
             if df is not None and not df.empty:
                 df = df.rename(columns={"date": "date", "close": "close", "volume": "volume"})
                 return df.tail(30)

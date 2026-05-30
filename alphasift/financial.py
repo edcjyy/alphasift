@@ -59,14 +59,20 @@ def enrich_roe(
         pro._DataApi__http_url = proxy_url
 
     if not force_tushare_fallback:
+        fina_succeeded = False
         try:
             result = _enrich_roe_from_fina_indicator(result, pro)
-            if result["roe_source"].notna().any() and (result["roe_source"] == "fina_indicator").any():
-                logger.info("ROE enriched via fina_indicator: %d stocks",
-                            (result["roe_source"] == "fina_indicator").sum())
-                return result
+            fina_succeeded = bool(
+                result["roe_source"].notna().any()
+                and (result["roe_source"] == "fina_indicator").any()
+            )
         except Exception as exc:
             logger.warning("fina_indicator failed (%s), falling back to daily_basic estimation", exc)
+        if fina_succeeded:
+            logger.info("ROE enriched via fina_indicator: %d stocks",
+                        (result["roe_source"] == "fina_indicator").sum())
+            # Do NOT return early — continue to daily_basic fallback so
+            # stocks that fina_indicator missed still get an ROE estimate.
 
     # Fallback: use daily_basic to estimate ROE ≈ PB / PE
     try:
