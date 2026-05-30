@@ -74,6 +74,7 @@ def init_db(data_dir: Path) -> sqlite3.Connection:
     """Initialize the experience database."""
     db_path = _get_db_path(data_dir)
     conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_SCHEMA)
     conn.commit()
     logger.info("Experience DB initialized: %s", db_path)
