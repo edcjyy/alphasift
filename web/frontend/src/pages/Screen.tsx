@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Loader2, AlertCircle, StopCircle } from 'lucide-react';
-import { useScreenStore, getStageLabel } from '@/stores/screenStore';
+import { useScreenStore } from '@/stores/screenStore';
 import { apiGet } from '@/api';
 import type { StrategySummary } from '@/types';
 import PickTable from '@/components/PickTable';

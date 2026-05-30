@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Brain, History, BarChart3, Play, AlertCircle, RefreshCw,
-  Eye, Check, X, ArrowRight, Lightbulb, TrendingUp, Zap,
+  Check, ArrowRight, Lightbulb, TrendingUp, Zap,
 } from 'lucide-react';
 import { apiGet, apiPost } from '@/api';
 import type { StrategySummary } from '@/types';

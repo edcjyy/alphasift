@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { apiPost, apiGet } from '@/api';
+import { apiPost } from '@/api';
 import type { RunDetail, ScreenParams } from '@/types';
 
 interface ScreenProgress {
