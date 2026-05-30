@@ -71,14 +71,21 @@ def _now() -> str:
 
 
 def init_db(data_dir: Path) -> sqlite3.Connection:
-    """Initialize the experience database."""
+    """Initialize the experience database (cached per data_dir)."""
     db_path = _get_db_path(data_dir)
+    key = str(db_path.resolve())
+    if key in _db_cache:
+        return _db_cache[key]
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_SCHEMA)
     conn.commit()
+    _db_cache[key] = conn
     logger.info("Experience DB initialized: %s", db_path)
     return conn
+
+
+_db_cache: dict[str, sqlite3.Connection] = {}
 
 
 def save_reflection(

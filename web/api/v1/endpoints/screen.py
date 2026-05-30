@@ -137,6 +137,17 @@ async def run_screen(
                 except Exception as exc:
                     logger.warning("Failed to save: %s", exc)
 
+                # Auto-evaluate so reflection can use the result immediately
+                try:
+                    from alphasift.evaluate import evaluate_saved_run
+                    from alphasift.store import save_evaluation_result
+                    eval_result = evaluate_saved_run(result.run_id, config=config)
+                    save_evaluation_result(eval_result, data_dir=config.data_dir)
+                    logger.info("Auto-evaluate complete: run=%s win_rate=%.1f%%",
+                                result.run_id, (eval_result.win_rate or 0) * 100)
+                except Exception as exc:
+                    logger.warning("Auto-evaluate skipped: %s", exc)
+
             _update_progress(task_id, "done", f"完成! 选出 {len(result.picks)} 只候选股", 100)
             return result
 

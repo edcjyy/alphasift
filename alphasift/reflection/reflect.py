@@ -72,7 +72,7 @@ def reflect_on_evaluation(
     try:
         eval_result = load_evaluation_result(run_id, data_dir=data_dir)
     except Exception as e:
-        logger.error("Failed to load evaluation: %s", e)
+        logger.warning("Skipping run %s — no evaluation found: %s", run_id, e)
         return ReflectionResult(
             run_id=run_id,
             strategy="unknown",
