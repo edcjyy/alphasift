@@ -10,6 +10,7 @@ import pandas as pd
 
 from alphasift.config import Config
 from alphasift.candidate_context import collect_candidate_context
+from alphasift.checkpoint import clear_checkpoints, load_checkpoint, save_checkpoint
 from alphasift.context import build_llm_context
 from alphasift.daily import enrich_daily_features
 from alphasift.filter import apply_hard_filters, requires_daily_features, without_daily_filters
@@ -97,6 +98,29 @@ def screen(
     strat = strategies[strategy]
     screening = strat.screening
 
+    # ---- Checkpoint resume: skip data stages if a scored checkpoint exists ----
+    # The most expensive part of the pipeline is data fetching + scoring.
+    # If a previous run completed these stages and only the LLM ranking or
+    # post-analysis failed, resume from the scored DataFrame directly.
+    skip_data_stages = False
+    cp_df = load_checkpoint(
+        "05_scored", run_id=run_id, strategy=strategy,
+        data_dir=config.data_dir, strategies_dir=config.strategies_dir,
+    )
+    if cp_df is not None:
+        df = cp_df
+        snapshot_source = str(cp_df.attrs.get("snapshot_source", ""))
+        source_errors: list[str] = []
+        snapshot_count = after_filter_count = daily_enrich_count = len(cp_df)
+        daily_enriched = True
+        degradation.append(
+            f"Resumed from scored checkpoint ({len(cp_df)} rows) — "
+            "skipping snapshot/filter/daily/ROE/scoring stages"
+        )
+        skip_data_stages = True
+
+    # ---- End checkpoint resume ----
+
     # ---- Deep-copy mutable fields to prevent regime-override side-effects ----
     # Regime overrides apply per-call multipliers to hard_filters, factor_weights,
     # risk_profile, and scorecard_profile. Since these are shared across calls on
@@ -175,7 +199,8 @@ def screen(
     daily_limit = daily_enrich_max_candidates or config.daily_enrich_max_candidates
     snapshot_filters = without_daily_filters(screening.hard_filters) if daily_needed else screening.hard_filters
 
-    # 2. Fetch snapshot
+    if not skip_data_stages:
+        # 2. Fetch snapshot
     snapshot_df = fetch_snapshot_with_fallback(
         config.snapshot_source_priority,
         required_columns=_required_snapshot_columns(snapshot_filters),
@@ -204,6 +229,24 @@ def screen(
     source_errors = [str(item) for item in snapshot_df.attrs.get("source_errors", [])]
     degradation.extend(f"Snapshot source fallback: {item}" for item in source_errors)
 
+    # Attach trade date for checkpoint validity and save snapshot checkpoint
+    from datetime import date as _date, datetime as _dt
+    _now = _dt.now()
+    _td = _date.today()
+    while _td.weekday() >= 5:
+        _td = _td - __import__("datetime").timedelta(days=1)
+    if _td == _date.today() and _now.hour < 16:
+        _td = _td - __import__("datetime").timedelta(days=1)
+        while _td.weekday() >= 5:
+            _td = _td - __import__("datetime").timedelta(days=1)
+    snapshot_df.attrs["trade_date"] = _td.isoformat()
+    save_checkpoint(
+        snapshot_df, stage="01_snapshot", run_id=run_id,
+        strategy=strategy, data_dir=config.data_dir,
+        strategies_dir=config.strategies_dir,
+        snapshot_source=snapshot_source,
+    )
+
     # 2.5 Compute data quality score on snapshot before hard filtering,
     # so data_quality_min filter has a column to work with.
     snapshot_df["data_quality_score"] = _compute_data_quality(snapshot_df)
@@ -212,6 +255,14 @@ def screen(
     # snapshot-safe filters, then enrich a narrowed candidate pool.
     df = apply_hard_filters(snapshot_df, snapshot_filters)
     after_filter_count = len(df)
+    # Carry over trade_date for checkpoint validation
+    df.attrs["trade_date"] = snapshot_df.attrs.get("trade_date", "")
+    save_checkpoint(
+        df, stage="02_filtered", run_id=run_id,
+        strategy=strategy, data_dir=config.data_dir,
+        strategies_dir=config.strategies_dir,
+        snapshot_source=snapshot_source,
+    )
 
     if df.empty:
         return ScreenResult(
@@ -269,6 +320,14 @@ def screen(
                 ) from exc
             degradation.append(f"Daily K-line enrichment skipped: {exc}")
 
+    if not df.empty and (daily_needed or daily_requested):
+        save_checkpoint(
+            df, stage="03_daily", run_id=run_id,
+            strategy=strategy, data_dir=config.data_dir,
+            strategies_dir=config.strategies_dir,
+            snapshot_source=snapshot_source,
+        )
+
     if df.empty:
         return ScreenResult(
             strategy=strategy,
@@ -293,6 +352,12 @@ def screen(
     # skips fina_indicator API which may be unreliable at the 15000-credit tier.
     df = enrich_roe(df, force_tushare_fallback=True)
     roe_count = (df.get("roe", pd.Series(dtype=float)).notna()).sum()
+    save_checkpoint(
+        df, stage="04_roe", run_id=run_id,
+        strategy=strategy, data_dir=config.data_dir,
+        strategies_dir=config.strategies_dir,
+        snapshot_source=snapshot_source,
+    )
     if roe_count > 0:
         degradation.append(
             f"ROE enriched: {roe_count}/{len(df)} candidates "
@@ -379,6 +444,13 @@ def screen(
 
     df = compute_screen_scores(df, screening, market_state_weights=ms_weights)
     df = df.sort_values("screen_score", ascending=False)
+    save_checkpoint(
+        df, stage="05_scored", run_id=run_id,
+        strategy=strategy, data_dir=config.data_dir,
+        strategies_dir=config.strategies_dir,
+        snapshot_source=snapshot_source,
+    )
+    # ---- End skip_data_stages block ----
 
     # 5. Take Top K for LLM ranking
     top_k = min(
@@ -521,6 +593,9 @@ def screen(
             scorecard_profile=screening.scorecard_profile,
         )
         degradation.extend(post_degradation)
+
+    # Clean up checkpoints on successful completion
+    clear_checkpoints(run_id, data_dir=config.data_dir)
 
     return ScreenResult(
         strategy=strategy,

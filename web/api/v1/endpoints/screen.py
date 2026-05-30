@@ -55,15 +55,24 @@ async def _run_dsa_background(run_id: str, data_dir: str):
     """后台异步执行 DSA 深度分析，不阻塞 screen HTTP 响应。"""
     try:
         from alphasift.config import Config
-        from alphasift.dsa import run_dsa_analysis
+        from alphasift.dsa import analyze_picks_with_dsa, apply_dsa_overlay
         from alphasift.store import load_screen_result, save_screen_result
 
         config = Config.from_env()
         logger.info("Background DSA starting: run_id=%s", run_id)
 
         screen_result = load_screen_result(run_id, data_dir=data_dir)
-        updated = run_dsa_analysis(screen_result, config=config)
-        save_screen_result(updated, data_dir=data_dir)
+        picks, notes = analyze_picks_with_dsa(
+            screen_result.picks,
+            run_id=run_id,
+            api_url=config.dsa_api_url,
+            timeout_sec=config.dsa_timeout_sec,
+            max_picks=config.dsa_max_picks,
+        )
+        picks, _ = apply_dsa_overlay(picks)
+        screen_result.picks = picks
+        screen_result.degradation.extend(notes)
+        save_screen_result(screen_result, data_dir=data_dir)
 
         logger.info("Background DSA complete: run_id=%s picks=%d", run_id, len(updated.picks))
     except Exception as e:

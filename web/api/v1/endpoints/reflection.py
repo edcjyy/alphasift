@@ -238,8 +238,12 @@ async def reflection_versions(strategy: str):
     from alphasift.config import Config
     from alphasift.reflection.mutator import list_versions
 
+    if ".." in strategy or "/" in strategy or "\\" in strategy:
+        raise HTTPException(status_code=400, detail="Invalid strategy name")
+    safe_name = strategy.strip()
+
     config = Config.from_env()
-    strategy_path = config.strategies_dir / f"{strategy}.yaml"
+    strategy_path = config.strategies_dir / f"{safe_name}.yaml"
     if not strategy_path.exists():
         raise HTTPException(status_code=404, detail=f"策略文件不存在: {strategy}.yaml")
 
@@ -259,8 +263,12 @@ async def reflection_rollback(strategy: str, req: RollbackRequest = RollbackRequ
     from alphasift.config import Config
     from alphasift.reflection.mutator import rollback_strategy
 
+    if ".." in strategy or "/" in strategy or "\\" in strategy:
+        raise HTTPException(status_code=400, detail="Invalid strategy name")
+    safe_name = strategy.strip()
+
     config = Config.from_env()
-    strategy_path = config.strategies_dir / f"{strategy}.yaml"
+    strategy_path = config.strategies_dir / f"{safe_name}.yaml"
     if not strategy_path.exists():
         raise HTTPException(status_code=404, detail=f"策略文件不存在: {strategy}.yaml")
 
